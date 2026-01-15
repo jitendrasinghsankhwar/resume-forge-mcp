@@ -581,6 +581,541 @@ def get_config() -> str:
     }, indent=2)
 
 
+# =============================================================================
+# Observability Tools - Analyze LaTeX and PDF for issues
+# =============================================================================
+
+@mcp.tool()
+def analyze_latex(filename: str) -> str:
+    """
+    Analyze a LaTeX resume file for common issues and potential problems.
+
+    Checks for:
+    - Syntax errors (unmatched braces, environments)
+    - Missing required packages
+    - Overly long lines that may cause overflow
+    - Common formatting issues
+    - Placeholder text that wasn't replaced
+    - Special characters that need escaping
+
+    Args:
+        filename: Name of the resume file to analyze
+
+    Returns detailed analysis with warnings and suggestions.
+    """
+    ensure_dirs()
+    filepath = get_resumes_dir() / ensure_tex_extension(filename)
+
+    if not filepath.exists():
+        return json.dumps({"error": f"Resume '{filename}' not found"})
+
+    try:
+        content = filepath.read_text(encoding="utf-8")
+        lines = content.split('\n')
+
+        issues = []
+        warnings = []
+        info = []
+
+        # Track brace balance
+        brace_count = 0
+        for i, line in enumerate(lines, 1):
+            # Skip comments
+            if line.strip().startswith('%'):
+                continue
+            brace_count += line.count('{') - line.count('}')
+
+        if brace_count != 0:
+            issues.append({
+                "type": "syntax_error",
+                "message": f"Unbalanced braces: {'+' if brace_count > 0 else ''}{brace_count} unclosed",
+                "severity": "error"
+            })
+
+        # Check for unmatched begin/end environments
+        import re
+        begins = re.findall(r'\\begin\{(\w+)\}', content)
+        ends = re.findall(r'\\end\{(\w+)\}', content)
+
+        begin_counts = {}
+        end_counts = {}
+        for env in begins:
+            begin_counts[env] = begin_counts.get(env, 0) + 1
+        for env in ends:
+            end_counts[env] = end_counts.get(env, 0) + 1
+
+        for env in set(list(begin_counts.keys()) + list(end_counts.keys())):
+            b = begin_counts.get(env, 0)
+            e = end_counts.get(env, 0)
+            if b != e:
+                issues.append({
+                    "type": "environment_mismatch",
+                    "message": f"Environment '{env}': {b} \\begin vs {e} \\end",
+                    "severity": "error"
+                })
+
+        # Check for placeholder text
+        placeholders = [
+            "YOUR NAME", "email@example.com", "Company Name", "Job Title",
+            "University Name", "City, State", "Start Date", "End Date",
+            "Graduation Date", "Accomplishment or responsibility",
+            "yourprofile", "yourusername", "(123) 456-7890"
+        ]
+
+        for placeholder in placeholders:
+            if placeholder in content:
+                warnings.append({
+                    "type": "placeholder_text",
+                    "message": f"Placeholder text found: '{placeholder}'",
+                    "severity": "warning"
+                })
+
+        # Check for long lines (potential overflow)
+        for i, line in enumerate(lines, 1):
+            # Skip comments and empty lines
+            stripped = line.strip()
+            if stripped.startswith('%') or not stripped:
+                continue
+
+            # Check visible text length (rough estimate)
+            # Remove LaTeX commands for length check
+            visible_text = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', line)
+            visible_text = re.sub(r'\\[a-zA-Z]+', '', visible_text)
+
+            if len(visible_text) > 100:
+                warnings.append({
+                    "type": "long_line",
+                    "message": f"Line {i} may be too long ({len(visible_text)} chars visible) - could cause overflow",
+                    "line_number": i,
+                    "severity": "warning"
+                })
+
+        # Check for special characters that need escaping
+        special_chars = ['&', '%', '$', '#', '_']
+        for i, line in enumerate(lines, 1):
+            if line.strip().startswith('%'):
+                continue
+            for char in special_chars:
+                # Find unescaped special characters
+                pattern = rf'(?<!\\){re.escape(char)}'
+                if char == '%':
+                    # % starts a comment, so only issue if it's clearly meant as literal
+                    continue
+                matches = list(re.finditer(pattern, line))
+                for match in matches:
+                    # Check if it's in a safe context (like $...$ for math)
+                    if char == '$':
+                        continue  # $ is for math mode
+                    if char == '&' and '\\begin{tabular' in content:
+                        continue  # & is for table columns
+                    warnings.append({
+                        "type": "unescaped_char",
+                        "message": f"Line {i}: Unescaped '{char}' - use '\\{char}' if literal",
+                        "line_number": i,
+                        "severity": "warning"
+                    })
+
+        # Check for common package requirements
+        required_packages = {
+            r'\\href': 'hyperref',
+            r'\\textcolor': 'xcolor',
+            r'\\definecolor': 'xcolor',
+            r'\\geometry': 'geometry',
+            r'\\begin\{itemize\}': 'enumitem (for options)',
+        }
+
+        for pattern, package in required_packages.items():
+            if re.search(pattern, content):
+                if f'\\usepackage{{{package.split()[0]}}}' not in content and f'\\usepackage[' not in content:
+                    # More lenient check
+                    pkg_name = package.split()[0]
+                    if pkg_name not in content:
+                        info.append({
+                            "type": "package_info",
+                            "message": f"Uses {pattern.replace(chr(92), '')} - ensure '{package}' is loaded",
+                            "severity": "info"
+                        })
+
+        # Count sections and items for structure overview
+        sections = re.findall(r'\\section\{([^}]+)\}', content)
+        experience_count = len(re.findall(r'\\resumeSubheading', content))
+        bullet_count = len(re.findall(r'\\resumeItem|\\item', content))
+
+        # Estimate page length (rough heuristic)
+        content_lines = len([l for l in lines if l.strip() and not l.strip().startswith('%')])
+        estimated_fullness = min(100, int((content_lines / 60) * 100))
+
+        if estimated_fullness > 95:
+            warnings.append({
+                "type": "page_overflow",
+                "message": f"Content may exceed one page (~{estimated_fullness}% full)",
+                "severity": "warning"
+            })
+        elif estimated_fullness < 40:
+            info.append({
+                "type": "sparse_content",
+                "message": f"Resume appears sparse (~{estimated_fullness}% full) - consider adding more content",
+                "severity": "info"
+            })
+
+        return json.dumps({
+            "filename": filename,
+            "analysis": {
+                "errors": [i for i in issues if i.get("severity") == "error"],
+                "warnings": warnings,
+                "info": info,
+                "structure": {
+                    "sections": sections,
+                    "experience_entries": experience_count,
+                    "bullet_points": bullet_count,
+                    "estimated_page_fullness": f"{estimated_fullness}%"
+                }
+            },
+            "summary": {
+                "error_count": len([i for i in issues if i.get("severity") == "error"]),
+                "warning_count": len(warnings),
+                "info_count": len(info),
+                "status": "errors_found" if issues else ("warnings_found" if warnings else "ok")
+            }
+        }, indent=2)
+
+    except Exception as e:
+        return json.dumps({"error": f"Analysis failed: {str(e)}"})
+
+
+@mcp.tool()
+def inspect_pdf(filename: str) -> str:
+    """
+    Inspect a compiled PDF resume for metadata, page info, and extract text content.
+
+    This allows the LLM to verify:
+    - PDF was generated successfully
+    - Number of pages (should be 1 for most resumes)
+    - Text content is correct and complete
+    - No content was cut off
+
+    Args:
+        filename: Name of the resume (with or without extension)
+
+    Returns PDF metadata and extracted text content.
+    """
+    ensure_dirs()
+    resumes_dir = get_resumes_dir()
+
+    # Handle both .tex and .pdf extensions
+    if filename.endswith('.tex'):
+        pdf_filename = filename.replace('.tex', '.pdf')
+    elif filename.endswith('.pdf'):
+        pdf_filename = filename
+    else:
+        pdf_filename = f"{filename}.pdf"
+
+    pdf_path = resumes_dir / pdf_filename
+
+    if not pdf_path.exists():
+        return json.dumps({
+            "error": f"PDF '{pdf_filename}' not found. Run compile_resume first.",
+            "hint": "Use compile_resume to generate the PDF from the .tex file"
+        })
+
+    result = {
+        "filename": pdf_filename,
+        "path": str(pdf_path),
+        "file_size_bytes": pdf_path.stat().st_size,
+        "file_size_kb": round(pdf_path.stat().st_size / 1024, 2),
+        "modified": datetime.fromtimestamp(pdf_path.stat().st_mtime).isoformat()
+    }
+
+    # Try to extract text using pdftotext if available
+    pdftotext = shutil.which("pdftotext")
+    if not pdftotext:
+        # Check common locations
+        for path in ["/opt/homebrew/bin/pdftotext", "/usr/local/bin/pdftotext", "/usr/bin/pdftotext"]:
+            if Path(path).exists():
+                pdftotext = path
+                break
+
+    if pdftotext:
+        try:
+            # Extract text with layout preservation
+            text_result = subprocess.run(
+                [pdftotext, "-layout", str(pdf_path), "-"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if text_result.returncode == 0:
+                extracted_text = text_result.stdout
+                lines = extracted_text.strip().split('\n')
+
+                result["text_extraction"] = {
+                    "success": True,
+                    "total_characters": len(extracted_text),
+                    "total_lines": len(lines),
+                    "content": extracted_text[:5000] if len(extracted_text) > 5000 else extracted_text,
+                    "truncated": len(extracted_text) > 5000
+                }
+
+                # Analyze extracted text for issues
+                text_issues = []
+
+                # Check for common problems
+                if len(lines) < 10:
+                    text_issues.append("Very few lines extracted - possible compilation issue")
+
+                if "?" in extracted_text and extracted_text.count("?") > 5:
+                    text_issues.append("Multiple '?' characters - possible font/encoding issue")
+
+                # Check if content seems cut off (ends mid-sentence)
+                if extracted_text.strip() and not extracted_text.strip()[-1] in '.!?)':
+                    text_issues.append("Content may be cut off (doesn't end with punctuation)")
+
+                # Look for overflow indicators
+                if "Overfull" in extracted_text or "Underfull" in extracted_text:
+                    text_issues.append("LaTeX overflow/underflow warnings present")
+
+                result["text_issues"] = text_issues
+            else:
+                result["text_extraction"] = {
+                    "success": False,
+                    "error": text_result.stderr
+                }
+        except Exception as e:
+            result["text_extraction"] = {
+                "success": False,
+                "error": str(e)
+            }
+    else:
+        result["text_extraction"] = {
+            "success": False,
+            "error": "pdftotext not installed. Install poppler: brew install poppler (macOS) or apt install poppler-utils (Linux)"
+        }
+
+    # Try to get page count using pdfinfo
+    pdfinfo = shutil.which("pdfinfo")
+    if not pdfinfo:
+        for path in ["/opt/homebrew/bin/pdfinfo", "/usr/local/bin/pdfinfo", "/usr/bin/pdfinfo"]:
+            if Path(path).exists():
+                pdfinfo = path
+                break
+
+    if pdfinfo:
+        try:
+            info_result = subprocess.run(
+                [pdfinfo, str(pdf_path)],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if info_result.returncode == 0:
+                info_lines = info_result.stdout.strip().split('\n')
+                pdf_metadata = {}
+
+                for line in info_lines:
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        pdf_metadata[key.strip().lower().replace(' ', '_')] = value.strip()
+
+                result["pdf_metadata"] = pdf_metadata
+
+                # Check page count
+                pages = int(pdf_metadata.get('pages', 1))
+                if pages > 1:
+                    result["page_warning"] = f"Resume is {pages} pages - consider condensing to 1 page"
+                elif pages == 1:
+                    result["page_status"] = "Good - resume fits on 1 page"
+
+        except Exception as e:
+            result["pdf_metadata"] = {"error": str(e)}
+
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def check_compilation_log(filename: str) -> str:
+    """
+    Check the LaTeX compilation log for warnings and errors.
+
+    This provides detailed information about:
+    - Overfull/underfull boxes (text overflow issues)
+    - Missing fonts or packages
+    - Undefined references
+    - Any LaTeX warnings
+
+    Args:
+        filename: Name of the resume file
+
+    Returns parsed compilation warnings and errors.
+    """
+    ensure_dirs()
+    resumes_dir = get_resumes_dir()
+
+    # Get the .log file
+    base_name = filename.replace('.tex', '').replace('.pdf', '')
+    log_path = resumes_dir / f"{base_name}.log"
+
+    if not log_path.exists():
+        return json.dumps({
+            "error": f"Log file not found for '{filename}'",
+            "hint": "Run compile_resume first (log file is created during compilation)"
+        })
+
+    try:
+        log_content = log_path.read_text(encoding="utf-8", errors="replace")
+
+        # Parse the log for issues
+        issues = {
+            "errors": [],
+            "warnings": [],
+            "overfull_boxes": [],
+            "underfull_boxes": [],
+            "missing_items": []
+        }
+
+        lines = log_content.split('\n')
+
+        for i, line in enumerate(lines):
+            # Errors
+            if line.startswith('!') or 'Error:' in line:
+                # Get context
+                context = lines[i:i+3] if i+3 < len(lines) else lines[i:]
+                issues["errors"].append({
+                    "message": line,
+                    "context": '\n'.join(context)
+                })
+
+            # Overfull boxes (content too wide)
+            if 'Overfull' in line:
+                issues["overfull_boxes"].append(line.strip())
+
+            # Underfull boxes (content too sparse)
+            if 'Underfull' in line:
+                issues["underfull_boxes"].append(line.strip())
+
+            # Warnings
+            if 'Warning:' in line or 'warning' in line.lower():
+                if 'Overfull' not in line and 'Underfull' not in line:
+                    issues["warnings"].append(line.strip())
+
+            # Missing items
+            if 'Missing' in line or 'not found' in line.lower():
+                issues["missing_items"].append(line.strip())
+
+        # Summarize
+        summary = {
+            "error_count": len(issues["errors"]),
+            "warning_count": len(issues["warnings"]),
+            "overfull_count": len(issues["overfull_boxes"]),
+            "underfull_count": len(issues["underfull_boxes"]),
+            "status": "success" if not issues["errors"] else "errors"
+        }
+
+        # Add recommendations
+        recommendations = []
+
+        if issues["overfull_boxes"]:
+            recommendations.append("Overfull boxes detected - some text may extend past margins. Consider shorter text or adjusting margins.")
+
+        if issues["underfull_boxes"]:
+            recommendations.append("Underfull boxes detected - some areas have awkward spacing. Usually cosmetic but may indicate layout issues.")
+
+        if not issues["errors"] and not issues["overfull_boxes"]:
+            recommendations.append("Compilation looks clean - no major issues detected.")
+
+        return json.dumps({
+            "filename": filename,
+            "issues": issues,
+            "summary": summary,
+            "recommendations": recommendations
+        }, indent=2)
+
+    except Exception as e:
+        return json.dumps({"error": f"Failed to parse log: {str(e)}"})
+
+
+@mcp.tool()
+def compile_and_verify(filename: str) -> str:
+    """
+    Compile a resume and automatically run all verification checks.
+
+    This is a convenience tool that:
+    1. Analyzes the LaTeX source for issues
+    2. Compiles to PDF
+    3. Inspects the generated PDF
+    4. Checks the compilation log
+
+    Returns a comprehensive report of the resume's status.
+
+    Args:
+        filename: Name of the resume file to compile and verify
+    """
+    ensure_dirs()
+    results = {
+        "filename": filename,
+        "steps": {}
+    }
+
+    # Step 1: Analyze LaTeX
+    latex_analysis = json.loads(analyze_latex(filename))
+    results["steps"]["latex_analysis"] = latex_analysis
+
+    # Check for blocking errors
+    if "error" in latex_analysis:
+        return json.dumps({
+            "error": latex_analysis["error"],
+            "step": "latex_analysis"
+        })
+
+    has_errors = latex_analysis.get("summary", {}).get("error_count", 0) > 0
+
+    if has_errors:
+        results["status"] = "blocked"
+        results["message"] = "LaTeX errors found - fix before compiling"
+        return json.dumps(results, indent=2)
+
+    # Step 2: Compile
+    compile_result = json.loads(compile_resume(filename))
+    results["steps"]["compilation"] = compile_result
+
+    if "error" in compile_result:
+        results["status"] = "compilation_failed"
+        results["message"] = compile_result["error"]
+        return json.dumps(results, indent=2)
+
+    # Step 3: Check log (don't fail on this)
+    try:
+        log_check = json.loads(check_compilation_log(filename))
+        results["steps"]["log_analysis"] = log_check
+    except:
+        results["steps"]["log_analysis"] = {"note": "Log analysis skipped"}
+
+    # Step 4: Inspect PDF
+    pdf_inspection = json.loads(inspect_pdf(filename))
+    results["steps"]["pdf_inspection"] = pdf_inspection
+
+    # Generate overall summary
+    warnings = []
+
+    if latex_analysis.get("summary", {}).get("warning_count", 0) > 0:
+        warnings.append(f"{latex_analysis['summary']['warning_count']} LaTeX warnings")
+
+    if "page_warning" in pdf_inspection:
+        warnings.append(pdf_inspection["page_warning"])
+
+    log_issues = results["steps"].get("log_analysis", {}).get("summary", {})
+    if log_issues.get("overfull_count", 0) > 0:
+        warnings.append(f"{log_issues['overfull_count']} overfull boxes (text may overflow)")
+
+    results["status"] = "success" if not warnings else "success_with_warnings"
+    results["warnings"] = warnings
+    results["pdf_path"] = compile_result.get("pdf_path")
+    results["message"] = "Resume compiled successfully" + (f" with {len(warnings)} warning(s)" if warnings else "")
+
+    return json.dumps(results, indent=2)
+
+
 def main():
     """Run the MCP server."""
     mcp.run()

@@ -9,6 +9,7 @@ An MCP (Model Context Protocol) server that lets you create, edit, and compile L
 - **Compile to PDF** using pdflatex (requires LaTeX installation)
 - **Add experience/education** entries with structured commands
 - **List and manage** multiple resume files
+- **Observability tools** - Analyze LaTeX for errors, inspect PDFs, verify formatting
 
 ## Installation
 
@@ -99,6 +100,7 @@ Download and install [MiKTeX](https://miktex.org/)
 
 ## Available Tools
 
+### Resume Management
 | Tool | Description |
 |------|-------------|
 | `list_resumes` | List all resume files |
@@ -107,10 +109,22 @@ Download and install [MiKTeX](https://miktex.org/)
 | `edit_resume` | Edit an existing resume |
 | `delete_resume` | Delete a resume |
 | `compile_resume` | Compile to PDF |
+
+### Templates
+| Tool | Description |
+|------|-------------|
 | `list_templates` | Show available templates |
 | `get_template` | Get template content |
 | `add_experience` | Add work experience |
 | `add_education` | Add education entry |
+
+### Observability & Verification
+| Tool | Description |
+|------|-------------|
+| `analyze_latex` | Check LaTeX for syntax errors, placeholder text, long lines |
+| `inspect_pdf` | Extract text from PDF, check page count, verify content |
+| `check_compilation_log` | Parse log for overfull boxes, warnings, errors |
+| `compile_and_verify` | Compile + run all checks in one step |
 | `get_config` | Show current configuration |
 
 ## Usage Examples
@@ -120,8 +134,25 @@ Once configured, you can use natural language in Claude:
 - "Create a new resume called software_engineer using the modern template"
 - "Add my experience at Google as a Senior Engineer from 2020 to present"
 - "Update my resume to change the email to newemail@example.com"
-- "Compile my resume to PDF"
+- "Compile my resume and check for any issues"
+- "Analyze my resume for formatting problems"
 - "List all my resumes"
+
+### Observability Example
+
+The `compile_and_verify` tool runs a complete check:
+
+```
+> Compile and verify my resume
+
+✓ LaTeX Analysis: 2 warnings (placeholder text found)
+✓ Compilation: Success
+✓ PDF Inspection: 1 page, 2847 characters extracted
+✓ Log Check: No overfull boxes
+
+Status: success_with_warnings
+PDF: ~/.latex-resumes/resumes/my_resume.pdf
+```
 
 ## Templates
 
@@ -137,6 +168,22 @@ Simple, no-frills layout focusing purely on content. Great for academic or resea
 ## Default Directories
 
 Resumes are stored in `~/.latex-resumes/resumes/` by default. You can customize this with the `LATEX_RESUME_DIR` environment variable.
+
+## Optional: PDF Text Extraction
+
+For full PDF inspection (text extraction, page count), install poppler:
+
+**macOS:**
+```bash
+brew install poppler
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install poppler-utils
+```
+
+This enables the `inspect_pdf` tool to extract and verify text content from compiled PDFs.
 
 ## License
 
