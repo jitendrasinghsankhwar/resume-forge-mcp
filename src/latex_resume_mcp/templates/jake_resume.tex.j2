@@ -88,12 +88,12 @@
   \resumeSubHeadingListStart
     <% for edu in education %>
     \resumeSubheading
-      {<< edu.institution >>}{<< edu.location >>}
-      {<< edu.degree >>}{<< edu.date >>}
+      {<< edu.institution|latex >>}{<< edu.location|latex >>}
+      {<< edu.degree|latex >>}{<< edu.date|latex >>}
       <% if edu.bullets %>
       \resumeItemListStart
         <% for bullet in edu.bullets %>
-        \resumeItem{<< bullet >>}
+        \resumeItem{<< bullet|latex >>}
         <% endfor %>
       \resumeItemListEnd
       <% endif %>
@@ -106,11 +106,11 @@
     \resumeSubHeadingListStart
       <% for pub in publications %>
       \resumeProjectHeading
-          {\textbf{<< pub.title >>}<% if pub.link %> $|$ \href{<< pub.link >>}{\underline{<< pub.link_text >>}}<% endif %>}{<< pub.date >>}
+          {\textbf{<< pub.title|latex >>}<% if pub.link %> $|$ \href{<< pub.link >>}{\underline{<< pub.link_text|latex >>}}<% endif %>}{<< pub.date|latex >>}
           <% if pub.bullets %>
           \resumeItemListStart
             <% for bullet in pub.bullets %>
-            \resumeItem{<< bullet >>}
+            \resumeItem{<< bullet|latex >>}
             <% endfor %>
           \resumeItemListEnd
           <% endif %>
@@ -124,12 +124,12 @@
 
     <% for exp in experience %>
     \resumeSubheading
-      {<< exp.company >>}{<< exp.location >>}
-      {<< exp.title >>}{<< exp.date >>}
+      {<< exp.company|latex >>}{<< exp.location|latex >>}
+      {<< exp.title|latex >>}{<< exp.date|latex >>}
       <% if exp.bullets %>
       \resumeItemListStart
         <% for bullet in exp.bullets %>
-        \resumeItem{<< bullet >>}
+        \resumeItem{<< bullet|latex >>}
         <% endfor %>
       \resumeItemListEnd
       <% endif %>
@@ -143,11 +143,11 @@
     \resumeSubHeadingListStart
       <% for proj in projects %>
       \resumeProjectHeading
-          {\textbf{<< proj.name >>}<% if proj.technologies %> $|$ \emph{<< proj.technologies >>}<% endif %>}{<< proj.date >>}
+          {\textbf{<< proj.name|latex >>}<% if proj.technologies %> $|$ \emph{<< proj.technologies|latex >>}<% endif %>}{<< proj.date|latex >>}
           <% if proj.bullets %>
           \resumeItemListStart
             <% for bullet in proj.bullets %>
-            \resumeItem{<< bullet >>}
+            \resumeItem{<< bullet|latex >>}
             <% endfor %>
           \resumeItemListEnd
           <% endif %>
@@ -160,7 +160,7 @@
  \begin{itemize}[leftmargin=0.15in, label={}]
     \small{\item{
      <% for cat in skills %>
-     \textbf{<< cat.category >>}{: << cat.skills | join(", ") >>}<% if not loop.last %> \\<% endif %>
+     \textbf{<< cat.category|latex >>}{: << cat.skills | join(", ") | latex >>}<% if not loop.last %> \\<% endif %>
      <% endfor %>
     }}
  \end{itemize}
