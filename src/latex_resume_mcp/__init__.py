@@ -1,6 +1,5 @@
-"""LaTeX Resume MCP Server - Create, edit, and compile LaTeX resumes via Claude."""
+"""LaTeX Resume MCP - Intelligent resume generation with visual verification."""
 
-from .server import main, mcp
+from latex_resume_mcp.server import main, mcp
 
-__version__ = "0.1.0"
 __all__ = ["main", "mcp"]

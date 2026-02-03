@@ -1,15 +1,15 @@
 # LaTeX Resume MCP
 
-An MCP (Model Context Protocol) server that lets you create, edit, and compile LaTeX resumes directly from Claude.
+An MCP (Model Context Protocol) server for intelligent LaTeX resume generation with visual verification, quality scoring, and job description tailoring.
 
 ## Features
 
-- **Create resumes** from built-in templates (modern, classic, minimal)
-- **Edit resumes** with full replacement or targeted find/replace
-- **Compile to PDF** using pdflatex (requires LaTeX installation)
-- **Add experience/education** entries with structured commands
-- **List and manage** multiple resume files
-- **Observability tools** - Analyze LaTeX for errors, inspect PDFs, verify formatting
+- **Data-driven resumes**: Store resume content in JSON, generate LaTeX on demand
+- **Visual verification**: Preview rendered PDFs as images directly in Claude
+- **Quality scoring**: Bullet analysis, ATS compatibility checks, keyword matching
+- **Job tailoring**: Auto-select and prioritize content based on job descriptions
+- **Variant management**: Create multiple resume versions for different roles
+- **LaTeX compilation**: Generate publication-quality PDFs using pdflatex
 
 ## Installation
 
@@ -66,15 +66,17 @@ Add to your Claude Desktop config file:
       "command": "uvx",
       "args": ["latex-resume-mcp"],
       "env": {
-        "LATEX_RESUME_DIR": "/path/to/your/resumes",
-        "LATEX_TEMPLATES_DIR": "/path/to/your/templates"
+        "LATEX_RESUME_DATA_DIR": "/path/to/data",
+        "LATEX_RESUME_OUTPUT_DIR": "/path/to/output"
       }
     }
   }
 }
 ```
 
-## Prerequisites for PDF Compilation
+## Prerequisites
+
+### LaTeX Installation
 
 To compile resumes to PDF, you need LaTeX installed:
 
@@ -87,103 +89,114 @@ brew install --cask basictex
 
 **Ubuntu/Debian:**
 ```bash
-sudo apt install texlive-latex-base texlive-latex-extra
-```
-
-**Fedora:**
-```bash
-sudo dnf install texlive-scheme-basic
+sudo apt install texlive-latex-base texlive-latex-extra texlive-fonts-extra
 ```
 
 **Windows:**
 Download and install [MiKTeX](https://miktex.org/)
 
-## Available Tools
+## Available Tools (15)
 
-### Resume Management
+### Data Management
+
 | Tool | Description |
 |------|-------------|
-| `list_resumes` | List all resume files |
-| `read_resume` | Read a resume's content |
-| `create_resume` | Create a new resume |
-| `edit_resume` | Edit an existing resume |
-| `delete_resume` | Delete a resume |
-| `compile_resume` | Compile to PDF |
+| `import_from_latex_file` | Parse existing .tex file into structured JSON data |
+| `get_resume_data` | Get the master resume data pool |
+| `update_resume_data` | Add, edit, or remove entries (experience, projects, etc.) |
+| `list_variants` | List all saved resume variants |
+| `get_variant` | Get details of a specific variant |
+| `save_variant` | Create or update a variant configuration |
 
-### Templates
+### Generation & Compilation
+
 | Tool | Description |
 |------|-------------|
-| `list_templates` | Show available templates |
-| `get_template` | Get template content |
-| `add_experience` | Add work experience |
-| `add_education` | Add education entry |
+| `generate_resume` | Generate .tex file from data (optionally using a variant) |
+| `compile_resume_tex` | Compile .tex to PDF using pdflatex |
+| `compile_and_preview` | Compile and return preview images |
+| `preview_resume` | Preview an existing PDF as images |
 
-### Observability & Verification
+### Intelligence
+
 | Tool | Description |
 |------|-------------|
-| `analyze_latex` | Check LaTeX for syntax errors, placeholder text, long lines |
-| `inspect_pdf` | Extract text from PDF, check page count, verify content |
-| `check_compilation_log` | Parse log for overfull boxes, warnings, errors |
-| `compile_and_verify` | Compile + run all checks in one step |
-| `get_config` | Show current configuration |
+| `score_resume_quality` | Score bullets, check ATS compatibility, match keywords |
+| `parse_job_description_text` | Extract keywords and requirements from job description |
+| `generate_tailored_resume` | Auto-select content based on JD, compile, and preview |
+
+### Utility
+
+| Tool | Description |
+|------|-------------|
+| `assess_quality` | Run programmatic checks (page count, encoding, overflow) |
+| `get_config` | Show current configuration and available tools |
 
 ## Usage Examples
 
-Once configured, you can use natural language in Claude:
-
-- "Create a new resume called software_engineer using the modern template"
-- "Add my experience at Google as a Senior Engineer from 2020 to present"
-- "Update my resume to change the email to newemail@example.com"
-- "Compile my resume and check for any issues"
-- "Analyze my resume for formatting problems"
-- "List all my resumes"
-
-### Observability Example
-
-The `compile_and_verify` tool runs a complete check:
+### Basic Workflow
 
 ```
-> Compile and verify my resume
+> Get my resume data
+Shows all stored experience, projects, education, skills
 
-✓ LaTeX Analysis: 2 warnings (placeholder text found)
-✓ Compilation: Success
-✓ PDF Inspection: 1 page, 2847 characters extracted
-✓ Log Check: No overfull boxes
+> Generate my resume and compile it
+Creates .tex file and compiles to PDF
 
-Status: success_with_warnings
-PDF: ~/.latex-resumes/resumes/my_resume.pdf
+> Preview my resume
+Returns rendered images of each page
 ```
 
-## Templates
+### Quality Improvement
 
-### Modern
-Clean, professional design with color accents and structured formatting. Best for tech roles.
+```
+> Score my resume quality
+Returns bullet scores, ATS report, improvement suggestions
 
-### Classic
-Traditional resume format with clear sections and horizontal rules. Good for conservative industries.
+> Score my resume against keywords: Python, AWS, Kubernetes
+Shows keyword match percentage and missing terms
+```
 
-### Minimal
-Simple, no-frills layout focusing purely on content. Great for academic or research positions.
+### Job Tailoring
+
+```
+> Parse this job description: [paste JD text]
+Extracts title, required skills, preferred skills, keywords
+
+> Generate a tailored resume for this job description
+Auto-selects most relevant experience/projects, reorders skills, compiles
+```
+
+### Variant Management
+
+```
+> List my resume variants
+Shows: swe, ml_engineer, backend, etc.
+
+> Save a new variant called "startup" with experiences 0,1,3
+Creates variant configuration
+
+> Generate my resume using the startup variant
+Uses variant's content selection and ordering
+```
+
+## Data Model
+
+Resume data is stored as JSON with these sections:
+
+- **contact**: Name, email, phone, LinkedIn, GitHub
+- **education**: Degrees with GPA, dates, coursework
+- **publications**: Academic publications
+- **experience**: Work history with bullets and tags
+- **projects**: Personal/open-source projects with tags
+- **skills**: Categorized skill lists
+
+Each experience and project can have **tags** (e.g., `["swe", "ml", "cloud"]`) for intelligent content selection.
 
 ## Default Directories
 
-Resumes are stored in `~/.latex-resumes/resumes/` by default. You can customize this with the `LATEX_RESUME_DIR` environment variable.
-
-## Optional: PDF Text Extraction
-
-For full PDF inspection (text extraction, page count), install poppler:
-
-**macOS:**
-```bash
-brew install poppler
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt install poppler-utils
-```
-
-This enables the `inspect_pdf` tool to extract and verify text content from compiled PDFs.
+- **Data**: `~/.latex-resumes/data/` (resume JSON and variants)
+- **Output**: `~/.latex-resumes/output/` (generated .tex and .pdf files)
 
 ## License
 
