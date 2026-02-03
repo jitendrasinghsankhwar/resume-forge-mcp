@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -35,44 +33,29 @@ from latex_resume_mcp.templates.engine import render_resume
 logger = logging.getLogger(__name__)
 
 
-def get_data_dir() -> Path:
+def _get_data_dir() -> Path:
 	"""Get data directory from environment or default."""
 	default = Path.home() / ".latex-resume-mcp"
 	return Path(os.environ.get("LATEX_RESUME_DATA_DIR", default))
 
 
-def get_output_dir() -> Path:
+def _get_output_dir() -> Path:
 	"""Get output directory for generated files."""
-	default = get_data_dir() / "output"
+	default = _get_data_dir() / "output"
 	return Path(os.environ.get("LATEX_RESUME_OUTPUT_DIR", default))
 
 
-@asynccontextmanager
-async def lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
-	"""Initialize server resources."""
-	data_dir = get_data_dir()
-	output_dir = get_output_dir()
-
+def _get_store() -> ResumeStore:
+	"""Get or create the resume store."""
+	data_dir = _get_data_dir()
 	data_dir.mkdir(parents=True, exist_ok=True)
+	return ResumeStore(data_dir)
+
+
+def _ensure_output_dir() -> Path:
+	"""Ensure output directory exists and return it."""
+	output_dir = _get_output_dir()
 	output_dir.mkdir(parents=True, exist_ok=True)
-
-	store = ResumeStore(data_dir)
-
-	yield {"store": store, "data_dir": data_dir, "output_dir": output_dir}
-
-
-mcp = FastMCP("latex-resume", lifespan=lifespan)
-
-
-def _get_store(ctx: Any) -> ResumeStore:
-	"""Get the resume store from context."""
-	store: ResumeStore = ctx.request_context.lifespan_context["store"]
-	return store
-
-
-def _get_output_dir(ctx: Any) -> Path:
-	"""Get the output directory from context."""
-	output_dir: Path = ctx.request_context.lifespan_context["output_dir"]
 	return output_dir
 
 
@@ -85,13 +68,16 @@ def _serialize_result(obj: Any) -> str:
 	return json.dumps(obj, indent=2, default=str)
 
 
+mcp = FastMCP("latex-resume")
+
+
 # =============================================================================
 # Data Management Tools
 # =============================================================================
 
 
 @mcp.tool()
-def import_from_latex_file(ctx: Any, tex_path: str) -> str:
+def import_from_latex_file(tex_path: str) -> str:
 	"""Import an existing LaTeX resume file into the JSON data model.
 
 	Parses a .tex file using Jake's Resume template format and extracts all
@@ -104,7 +90,7 @@ def import_from_latex_file(ctx: Any, tex_path: str) -> str:
 	Returns:
 		JSON with import status and summary of extracted entries.
 	"""
-	store = _get_store(ctx)
+	store = _get_store()
 	path = Path(tex_path).expanduser()
 
 	try:
@@ -131,7 +117,7 @@ def import_from_latex_file(ctx: Any, tex_path: str) -> str:
 
 
 @mcp.tool()
-def get_resume_data(ctx: Any) -> str:
+def get_resume_data() -> str:
 	"""Read the master resume data pool.
 
 	Returns the complete resume data including all entries across all sections.
@@ -140,7 +126,7 @@ def get_resume_data(ctx: Any) -> str:
 	Returns:
 		JSON with complete resume data or error if not found.
 	"""
-	store = _get_store(ctx)
+	store = _get_store()
 	data = store.load_data()
 
 	if data is None:
@@ -154,7 +140,6 @@ def get_resume_data(ctx: Any) -> str:
 
 @mcp.tool()
 def update_resume_data(
-	ctx: Any,
 	section: str,
 	action: str,
 	index: int | None = None,
@@ -176,7 +161,7 @@ def update_resume_data(
 		Update project: section="projects", action="update", index=0, data='{"name":"New",...}'
 		Delete entry: section="education", action="delete", index=1
 	"""
-	store = _get_store(ctx)
+	store = _get_store()
 	resume_data = store.load_data()
 
 	if resume_data is None:
@@ -239,13 +224,13 @@ def update_resume_data(
 
 
 @mcp.tool()
-def list_variants(ctx: Any) -> str:
+def list_variants() -> str:
 	"""List all available resume variants.
 
 	Returns:
 		JSON array of variant names with descriptions.
 	"""
-	store = _get_store(ctx)
+	store = _get_store()
 	names = store.list_variants()
 
 	variants_info = []
@@ -263,7 +248,7 @@ def list_variants(ctx: Any) -> str:
 
 
 @mcp.tool()
-def get_variant(ctx: Any, name: str) -> str:
+def get_variant(name: str) -> str:
 	"""Get a specific resume variant by name.
 
 	Args:
@@ -272,7 +257,7 @@ def get_variant(ctx: Any, name: str) -> str:
 	Returns:
 		JSON with variant configuration or error if not found.
 	"""
-	store = _get_store(ctx)
+	store = _get_store()
 	variant = store.load_variant(name)
 
 	if variant is None:
@@ -282,7 +267,7 @@ def get_variant(ctx: Any, name: str) -> str:
 
 
 @mcp.tool()
-def save_variant(ctx: Any, variant_json: str) -> str:
+def save_variant(variant_json: str) -> str:
 	"""Save a resume variant configuration.
 
 	Args:
@@ -300,7 +285,7 @@ def save_variant(ctx: Any, variant_json: str) -> str:
 			"section_order": ["education", "experience", "projects", "skills"]
 		}
 	"""
-	store = _get_store(ctx)
+	store = _get_store()
 
 	try:
 		variant_data = json.loads(variant_json)
@@ -320,7 +305,6 @@ def save_variant(ctx: Any, variant_json: str) -> str:
 
 @mcp.tool()
 def generate_resume(
-	ctx: Any,
 	variant_name: str | None = None,
 	output_filename: str = "resume",
 ) -> str:
@@ -333,8 +317,8 @@ def generate_resume(
 	Returns:
 		JSON with LaTeX file path and status.
 	"""
-	store = _get_store(ctx)
-	output_dir = _get_output_dir(ctx)
+	store = _get_store()
+	output_dir = _ensure_output_dir()
 
 	data = store.load_data()
 	if data is None:
@@ -362,7 +346,7 @@ def generate_resume(
 
 
 @mcp.tool()
-def compile_resume_tex(ctx: Any, tex_path: str | None = None) -> str:
+def compile_resume_tex(tex_path: str | None = None) -> str:
 	"""Compile a LaTeX resume to PDF using pdflatex.
 
 	Args:
@@ -371,7 +355,7 @@ def compile_resume_tex(ctx: Any, tex_path: str | None = None) -> str:
 	Returns:
 		JSON with PDF path, compilation status, and any errors/warnings.
 	"""
-	output_dir = _get_output_dir(ctx)
+	output_dir = _ensure_output_dir()
 
 	if tex_path is None:
 		# Find most recent .tex file in output dir
@@ -402,7 +386,6 @@ def compile_resume_tex(ctx: Any, tex_path: str | None = None) -> str:
 
 @mcp.tool()
 def compile_and_preview(
-	ctx: Any,
 	variant_name: str | None = None,
 	output_filename: str = "resume",
 	dpi: int = 200,
@@ -420,8 +403,8 @@ def compile_and_preview(
 	Returns:
 		Image of the rendered resume, or error JSON string.
 	"""
-	store = _get_store(ctx)
-	output_dir = _get_output_dir(ctx)
+	store = _get_store()
+	output_dir = _ensure_output_dir()
 
 	# Load data
 	data = store.load_data()
@@ -459,7 +442,7 @@ def compile_and_preview(
 
 
 @mcp.tool()
-def preview_resume(ctx: Any, pdf_path: str | None = None, dpi: int = 200) -> Any:
+def preview_resume(pdf_path: str | None = None, dpi: int = 200) -> Any:
 	"""Render an existing PDF resume to PNG for visual inspection.
 
 	Args:
@@ -469,7 +452,7 @@ def preview_resume(ctx: Any, pdf_path: str | None = None, dpi: int = 200) -> Any
 	Returns:
 		Image of the resume, or error JSON string.
 	"""
-	output_dir = _get_output_dir(ctx)
+	output_dir = _ensure_output_dir()
 
 	if pdf_path is None:
 		pdf_files = list(output_dir.glob("*.pdf"))
@@ -494,10 +477,7 @@ def preview_resume(ctx: Any, pdf_path: str | None = None, dpi: int = 200) -> Any
 
 
 @mcp.tool()
-def score_resume_quality(
-	ctx: Any,
-	keywords: list[str] | None = None,
-) -> str:
+def score_resume_quality(keywords: list[str] | None = None) -> str:
 	"""Analyze resume quality with detailed scoring.
 
 	Evaluates bullet quality, ATS compatibility, keyword matching,
@@ -509,7 +489,7 @@ def score_resume_quality(
 	Returns:
 		JSON with detailed quality scores and suggestions.
 	"""
-	store = _get_store(ctx)
+	store = _get_store()
 	data = store.load_data()
 
 	if data is None:
@@ -523,7 +503,7 @@ def score_resume_quality(
 
 
 @mcp.tool()
-def parse_job_description_text(ctx: Any, jd_text: str) -> str:
+def parse_job_description_text(jd_text: str) -> str:
 	"""Parse a job description to extract skills, requirements, and keywords.
 
 	Use this to understand what a job requires before tailoring a resume.
@@ -543,7 +523,6 @@ def parse_job_description_text(ctx: Any, jd_text: str) -> str:
 
 @mcp.tool()
 def generate_tailored_resume(
-	ctx: Any,
 	jd_text: str,
 	variant_name: str = "tailored",
 	target_tags: list[str] | None = None,
@@ -569,8 +548,8 @@ def generate_tailored_resume(
 	Returns:
 		Preview image if compile_pdf=True, otherwise JSON with variant details.
 	"""
-	store = _get_store(ctx)
-	output_dir = _get_output_dir(ctx)
+	store = _get_store()
+	output_dir = _ensure_output_dir()
 
 	data = store.load_data()
 	if data is None:
@@ -618,7 +597,7 @@ def generate_tailored_resume(
 
 
 @mcp.tool()
-def assess_quality(ctx: Any, pdf_path: str | None = None) -> str:
+def assess_quality(pdf_path: str | None = None) -> str:
 	"""Programmatic quality checks on a compiled resume.
 
 	Checks page count, file size, encoding issues, and other technical aspects.
@@ -629,7 +608,7 @@ def assess_quality(ctx: Any, pdf_path: str | None = None) -> str:
 	Returns:
 		JSON with quality assessment results.
 	"""
-	output_dir = _get_output_dir(ctx)
+	output_dir = _ensure_output_dir()
 
 	if pdf_path is None:
 		pdf_files = list(output_dir.glob("*.pdf"))
@@ -685,14 +664,14 @@ def assess_quality(ctx: Any, pdf_path: str | None = None) -> str:
 
 
 @mcp.tool()
-def get_config(ctx: Any) -> str:
+def get_config() -> str:
 	"""Show current configuration and tool availability.
 
 	Returns:
 		JSON with configuration details.
 	"""
-	store = _get_store(ctx)
-	output_dir = _get_output_dir(ctx)
+	store = _get_store()
+	output_dir = _ensure_output_dir()
 
 	# Check for data
 	has_data = store.load_data() is not None

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -13,22 +14,10 @@ from latex_resume_mcp.models.resume import ResumeData, ResumeVariant
 from latex_resume_mcp.storage.resume_store import ResumeStore
 
 
-class MockContext:
-	"""Mock context for tool invocations."""
-
-	def __init__(self, store: ResumeStore, output_dir: Path) -> None:
-		self.request_context = MagicMock()
-		self.request_context.lifespan_context = {
-			"store": store,
-			"data_dir": store.data_path.parent,
-			"output_dir": output_dir,
-		}
-
-
 @pytest.fixture
 def integration_setup(
 	sample_resume_data: ResumeData, sample_variant: ResumeVariant
-) -> tuple[MockContext, ResumeStore, Path]:
+) -> Generator[tuple[ResumeStore, Path], None, None]:
 	"""Set up integration test environment."""
 	with tempfile.TemporaryDirectory() as tmpdir:
 		data_dir = Path(tmpdir) / "data"
@@ -40,23 +29,26 @@ def integration_setup(
 		store.save_data(sample_resume_data)
 		store.save_variant(sample_variant)
 
-		ctx = MockContext(store, output_dir)
-
-		yield ctx, store, output_dir
+		# Patch the helper functions to use our test directories
+		with (
+			patch("latex_resume_mcp.server._get_store", return_value=store),
+			patch("latex_resume_mcp.server._ensure_output_dir", return_value=output_dir),
+			patch("latex_resume_mcp.server._get_data_dir", return_value=data_dir),
+			patch("latex_resume_mcp.server._get_output_dir", return_value=output_dir),
+		):
+			yield store, output_dir
 
 
 class TestDataManagementTools:
 	"""Integration tests for data management tools."""
 
 	def test_get_resume_data_returns_json(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""get_resume_data returns valid JSON."""
 		from latex_resume_mcp.server import get_resume_data
 
-		ctx, _, _ = integration_setup
-
-		result = get_resume_data(ctx)
+		result = get_resume_data()
 		data = json.loads(result)
 
 		assert "contact" in data
@@ -68,22 +60,19 @@ class TestDataManagementTools:
 
 		with tempfile.TemporaryDirectory() as tmpdir:
 			store = ResumeStore(Path(tmpdir))
-			ctx = MockContext(store, Path(tmpdir))
+			with patch("latex_resume_mcp.server._get_store", return_value=store):
+				result = get_resume_data()
+				data = json.loads(result)
 
-			result = get_resume_data(ctx)
-			data = json.loads(result)
-
-			assert "error" in data
+				assert "error" in data
 
 	def test_list_variants_returns_list(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""list_variants returns variant list."""
 		from latex_resume_mcp.server import list_variants
 
-		ctx, _, _ = integration_setup
-
-		result = list_variants(ctx)
+		result = list_variants()
 		data = json.loads(result)
 
 		assert "variants" in data
@@ -91,39 +80,35 @@ class TestDataManagementTools:
 		assert data["variants"][0]["name"] == "swe"
 
 	def test_get_variant_returns_details(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""get_variant returns variant configuration."""
 		from latex_resume_mcp.server import get_variant
 
-		ctx, _, _ = integration_setup
-
-		result = get_variant(ctx, "swe")
+		result = get_variant("swe")
 		data = json.loads(result)
 
 		assert data["name"] == "swe"
 		assert "experience_indices" in data
 
 	def test_get_variant_not_found(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""get_variant returns error for unknown variant."""
 		from latex_resume_mcp.server import get_variant
 
-		ctx, _, _ = integration_setup
-
-		result = get_variant(ctx, "nonexistent")
+		result = get_variant("nonexistent")
 		data = json.loads(result)
 
 		assert "error" in data
 
 	def test_save_variant_creates_new(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""save_variant creates a new variant."""
 		from latex_resume_mcp.server import save_variant
 
-		ctx, store, _ = integration_setup
+		store, _ = integration_setup
 
 		variant_json = json.dumps({
 			"name": "ml",
@@ -132,19 +117,17 @@ class TestDataManagementTools:
 			"project_indices": [0],
 		})
 
-		result = save_variant(ctx, variant_json)
+		result = save_variant(variant_json)
 		data = json.loads(result)
 
 		assert data["success"] is True
 		assert store.load_variant("ml") is not None
 
 	def test_update_resume_data_add(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""update_resume_data can add entries."""
 		from latex_resume_mcp.server import update_resume_data
-
-		ctx, store, _ = integration_setup
 
 		entry = json.dumps({
 			"company": "New Company",
@@ -154,7 +137,7 @@ class TestDataManagementTools:
 		})
 
 		result = update_resume_data(
-			ctx, section="experience", action="add", data=entry
+			section="experience", action="add", data=entry
 		)
 		data = json.loads(result)
 
@@ -166,44 +149,38 @@ class TestGenerationTools:
 	"""Integration tests for generation and compilation tools."""
 
 	def test_generate_resume_creates_tex(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""generate_resume creates .tex file."""
 		from latex_resume_mcp.server import generate_resume
 
-		ctx, _, output_dir = integration_setup
+		_, output_dir = integration_setup
 
-		result = generate_resume(ctx, output_filename="test_resume")
+		result = generate_resume(output_filename="test_resume")
 		data = json.loads(result)
 
 		assert data["success"] is True
 		assert (output_dir / "test_resume.tex").exists()
 
 	def test_generate_resume_with_variant(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""generate_resume uses variant when specified."""
 		from latex_resume_mcp.server import generate_resume
 
-		ctx, _, output_dir = integration_setup
-
-		result = generate_resume(
-			ctx, variant_name="swe", output_filename="swe_resume"
-		)
+		result = generate_resume(variant_name="swe", output_filename="swe_resume")
 		data = json.loads(result)
 
 		assert data["success"] is True
 		assert data["variant"] == "swe"
 
 	def test_generate_resume_invalid_variant(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""generate_resume errors on invalid variant."""
 		from latex_resume_mcp.server import generate_resume
 
-		ctx, _, _ = integration_setup
-
-		result = generate_resume(ctx, variant_name="nonexistent")
+		result = generate_resume(variant_name="nonexistent")
 		data = json.loads(result)
 
 		assert "error" in data
@@ -213,14 +190,12 @@ class TestIntelligenceTools:
 	"""Integration tests for intelligence tools."""
 
 	def test_score_resume_quality(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""score_resume_quality returns detailed scores."""
 		from latex_resume_mcp.server import score_resume_quality
 
-		ctx, _, _ = integration_setup
-
-		result = score_resume_quality(ctx)
+		result = score_resume_quality()
 		data = json.loads(result)
 
 		assert "overall_score" in data
@@ -228,26 +203,22 @@ class TestIntelligenceTools:
 		assert "ats_report" in data
 
 	def test_score_resume_quality_with_keywords(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""score_resume_quality includes keyword match."""
 		from latex_resume_mcp.server import score_resume_quality
 
-		ctx, _, _ = integration_setup
-
-		result = score_resume_quality(ctx, keywords=["Python", "Flask"])
+		result = score_resume_quality(keywords=["Python", "Flask"])
 		data = json.loads(result)
 
 		assert "keyword_match" in data
 		assert data["keyword_match"] is not None
 
 	def test_parse_job_description_text(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""parse_job_description_text extracts JD info."""
 		from latex_resume_mcp.server import parse_job_description_text
-
-		ctx, _, _ = integration_setup
 
 		jd_text = """
 		Software Engineer
@@ -255,7 +226,7 @@ class TestIntelligenceTools:
 		Nice to have: Kubernetes, Docker
 		"""
 
-		result = parse_job_description_text(ctx, jd_text)
+		result = parse_job_description_text(jd_text)
 		data = json.loads(result)
 
 		assert "keywords" in data
@@ -266,14 +237,12 @@ class TestUtilityTools:
 	"""Integration tests for utility tools."""
 
 	def test_get_config(
-		self, integration_setup: tuple[MockContext, ResumeStore, Path]
+		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""get_config returns configuration."""
 		from latex_resume_mcp.server import get_config
 
-		ctx, _, _ = integration_setup
-
-		result = get_config(ctx)
+		result = get_config()
 		data = json.loads(result)
 
 		assert "has_resume_data" in data
