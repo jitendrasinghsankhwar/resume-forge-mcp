@@ -17,6 +17,7 @@ from latex_resume_mcp.intelligence.analyzer import score_resume
 from latex_resume_mcp.intelligence.tailoring import (
 	generate_tailored_variant,
 	parse_job_description,
+	select_content_with_details,
 )
 from latex_resume_mcp.models.resume import (
 	Education,
@@ -526,6 +527,12 @@ def generate_tailored_resume(
 	jd_text: str,
 	variant_name: str = "tailored",
 	target_tags: list[str] | None = None,
+	include_experiences: list[int] | None = None,
+	exclude_experiences: list[int] | None = None,
+	include_projects: list[int] | None = None,
+	exclude_projects: list[int] | None = None,
+	max_experiences: int = 4,
+	max_projects: int = 3,
 	compile_pdf: bool = True,
 	dpi: int = 200,
 ) -> Any:
@@ -533,7 +540,7 @@ def generate_tailored_resume(
 
 	This is the highest-level tool for resume tailoring. It:
 	1. Parses the job description for keywords and requirements
-	2. Selects and ranks experiences/projects by relevance
+	2. Selects and ranks experiences/projects by relevance (with page budget)
 	3. Generates a tailored variant
 	4. Compiles to PDF
 	5. Returns a preview image for visual verification
@@ -542,6 +549,12 @@ def generate_tailored_resume(
 		jd_text: Raw job description text.
 		variant_name: Name to save the generated variant as.
 		target_tags: Optional tags to prioritize (e.g., ["swe", "ml"]).
+		include_experiences: Force include these experience indices (in given order).
+		exclude_experiences: Exclude these experience indices from selection.
+		include_projects: Force include these project indices (in given order).
+		exclude_projects: Exclude these project indices from selection.
+		max_experiences: Maximum number of experience entries (default 4).
+		max_projects: Maximum number of project entries (default 3).
 		compile_pdf: Whether to compile and preview (default True).
 		dpi: Resolution for preview image.
 
@@ -557,7 +570,18 @@ def generate_tailored_resume(
 
 	try:
 		# Generate tailored variant
-		variant, jd = generate_tailored_variant(data, jd_text, variant_name, target_tags)
+		variant, jd = generate_tailored_variant(
+			data,
+			jd_text,
+			variant_name,
+			target_tags,
+			max_experience=max_experiences,
+			max_projects=max_projects,
+			include_experiences=include_experiences,
+			exclude_experiences=exclude_experiences,
+			include_projects=include_projects,
+			exclude_projects=exclude_projects,
+		)
 
 		# Save the variant
 		store.save_variant(variant)
@@ -589,6 +613,112 @@ def generate_tailored_resume(
 
 	except Exception as e:
 		return json.dumps({"error": f"Tailored resume generation failed: {str(e)}"})
+
+
+@mcp.tool()
+def preview_content_selection(
+	jd_text: str,
+	target_tags: list[str] | None = None,
+	include_experiences: list[int] | None = None,
+	exclude_experiences: list[int] | None = None,
+	include_projects: list[int] | None = None,
+	exclude_projects: list[int] | None = None,
+	max_experiences: int = 4,
+	max_projects: int = 3,
+) -> str:
+	"""Preview which entries will be selected and their relevance scores.
+
+	Use this BEFORE generate_tailored_resume to see and adjust selection.
+	Returns detailed information about what will be included and why.
+
+	Args:
+		jd_text: Raw job description text.
+		target_tags: Optional tags to prioritize (e.g., ["swe", "ml"]).
+		include_experiences: Force include these experience indices.
+		exclude_experiences: Exclude these experience indices.
+		include_projects: Force include these project indices.
+		exclude_projects: Exclude these project indices.
+		max_experiences: Maximum experience entries (default 4).
+		max_projects: Maximum project entries (default 3).
+
+	Returns:
+		JSON with selected entries, scores, line estimates, and budget info.
+	"""
+	store = _get_store()
+	data = store.load_data()
+
+	if data is None:
+		return json.dumps({"error": "No resume data found"})
+
+	try:
+		jd = parse_job_description(jd_text)
+		selection = select_content_with_details(
+			data=data,
+			jd=jd,
+			target_tags=target_tags,
+			max_experience=max_experiences,
+			max_projects=max_projects,
+			include_experiences=include_experiences,
+			exclude_experiences=exclude_experiences,
+			include_projects=include_projects,
+			exclude_projects=exclude_projects,
+		)
+
+		# Build detailed response
+		experiences_detail = []
+		for entry_score in selection.experience_scores:
+			exp = data.experience[entry_score.index]
+			experiences_detail.append({
+				"index": entry_score.index,
+				"company": exp.company,
+				"title": exp.title,
+				"score": round(entry_score.score, 3),
+				"estimated_lines": entry_score.estimated_lines,
+				"tags": exp.tags,
+				"forced": entry_score.index in (include_experiences or []),
+			})
+
+		projects_detail = []
+		for entry_score in selection.project_scores:
+			proj = data.projects[entry_score.index]
+			projects_detail.append({
+				"index": entry_score.index,
+				"name": proj.name,
+				"score": round(entry_score.score, 3),
+				"estimated_lines": entry_score.estimated_lines,
+				"tags": proj.tags,
+				"forced": entry_score.index in (include_projects or []),
+			})
+
+		# Build warnings
+		warnings = []
+		if selection.over_budget:
+			warnings.append(
+				f"Selection exceeds page budget by {-selection.budget_remaining} lines"
+			)
+		if selection.budget_remaining > 10:
+			warnings.append(
+				f"Page has {selection.budget_remaining} lines of unused space"
+			)
+
+		result = {
+			"jd_title": jd.title,
+			"required_skills": jd.required_skills,
+			"preferred_skills": jd.preferred_skills,
+			"keywords_found": len(jd.keywords),
+			"selected_experiences": experiences_detail,
+			"selected_projects": projects_detail,
+			"total_estimated_lines": selection.total_estimated_lines,
+			"page_budget": 52,
+			"budget_remaining": selection.budget_remaining,
+			"over_budget": selection.over_budget,
+			"warnings": warnings,
+		}
+
+		return json.dumps(result, indent=2)
+
+	except Exception as e:
+		return json.dumps({"error": f"Preview failed: {str(e)}"})
 
 
 # =============================================================================
@@ -704,6 +834,7 @@ def get_config() -> str:
 			"score_resume_quality",
 			"parse_job_description_text",
 			"generate_tailored_resume",
+			"preview_content_selection",
 			"assess_quality",
 			"get_config",
 		],

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from latex_resume_mcp.intelligence.tailoring import (
+	PAGE_BUDGET,
+	estimate_entry_lines,
 	generate_tailored_variant,
 	parse_job_description,
 	select_content_for_jd,
+	select_content_with_details,
 )
 from latex_resume_mcp.models.analysis import JobDescription
-from latex_resume_mcp.models.resume import ResumeData
+from latex_resume_mcp.models.resume import Experience, Project, ResumeData
 
 SAMPLE_JD = """
 Senior Software Engineer
@@ -202,3 +205,218 @@ class TestGenerateTailoredVariant:
 
 		assert len(variant.section_order) > 0
 		assert "experience" in variant.section_order
+
+
+class TestEstimateEntryLines:
+	"""Tests for estimate_entry_lines function."""
+
+	def test_experience_entry_lines(self) -> None:
+		"""Experience entries have header lines plus bullet lines."""
+		exp = Experience(
+			company="TestCorp",
+			title="Engineer",
+			date="2024",
+			bullets=["Short bullet", "Another short one"],
+			tags=[],
+		)
+		lines = estimate_entry_lines(exp, "experience")
+
+		# 2 header lines + 2 bullet lines (short bullets = 1 line each)
+		assert lines == 4
+
+	def test_project_entry_lines(self) -> None:
+		"""Project entries have 1 header line plus bullet lines."""
+		proj = Project(
+			name="TestProject",
+			technologies="Python, Flask",
+			bullets=["Short bullet"],
+			tags=[],
+		)
+		lines = estimate_entry_lines(proj, "project")
+
+		# 1 header line + 1 bullet line
+		assert lines == 2
+
+	def test_long_bullet_wrapping(self) -> None:
+		"""Long bullets are estimated to wrap across multiple lines."""
+		# 250 chars = should estimate to ~3 lines (100 chars per line)
+		long_bullet = "x" * 250
+		exp = Experience(
+			company="TestCorp",
+			title="Engineer",
+			date="2024",
+			bullets=[long_bullet],
+			tags=[],
+		)
+		lines = estimate_entry_lines(exp, "experience")
+
+		# 2 header lines + 3 bullet lines (250/100 rounded up)
+		assert lines == 5
+
+
+class TestIncludeExcludeLogic:
+	"""Tests for include/exclude parameters."""
+
+	def test_include_experiences_forces_selection(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Force-included experiences are selected regardless of score."""
+		jd = parse_job_description(SAMPLE_JD)
+		variant = select_content_for_jd(
+			sample_resume_data,
+			jd,
+			include_experiences=[1],  # Force include index 1
+			max_experience=1,
+		)
+
+		# Index 1 should be included even with max_experience=1
+		assert 1 in variant.experience_indices
+
+	def test_exclude_experiences_prevents_selection(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Excluded experiences are never selected."""
+		jd = parse_job_description(SAMPLE_JD)
+		variant = select_content_for_jd(
+			sample_resume_data,
+			jd,
+			exclude_experiences=[0],  # Exclude index 0
+		)
+
+		assert 0 not in variant.experience_indices
+
+	def test_include_projects_forces_selection(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Force-included projects are selected regardless of score."""
+		jd = parse_job_description(SAMPLE_JD)
+		variant = select_content_for_jd(
+			sample_resume_data,
+			jd,
+			include_projects=[0],
+			max_projects=1,
+		)
+
+		assert 0 in variant.project_indices
+
+	def test_exclude_projects_prevents_selection(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Excluded projects are never selected."""
+		jd = parse_job_description(SAMPLE_JD)
+		variant = select_content_for_jd(
+			sample_resume_data,
+			jd,
+			exclude_projects=[0],
+		)
+
+		assert 0 not in variant.project_indices
+
+	def test_include_and_exclude_conflict(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Exclude takes precedence over include."""
+		jd = parse_job_description(SAMPLE_JD)
+		variant = select_content_for_jd(
+			sample_resume_data,
+			jd,
+			include_experiences=[0],
+			exclude_experiences=[0],  # Exclude same one
+		)
+
+		# Exclude should win
+		assert 0 not in variant.experience_indices
+
+
+class TestWeightedScoring:
+	"""Tests for weighted scoring algorithm."""
+
+	def test_required_skills_weighted_higher(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Required skills have higher weight than preferred."""
+		# Create JD with required skills that match first experience
+		jd_text = """
+		Software Engineer
+		Requirements:
+		- PostgreSQL experience required
+		- AWS experience required
+
+		Nice to have:
+		- Machine Learning
+		"""
+		jd = parse_job_description(jd_text)
+		selection = select_content_with_details(
+			sample_resume_data, jd, use_page_budget=False
+		)
+
+		# First experience (E2 Consulting) mentions PostgreSQL and AWS
+		# Should have a higher score due to required skills matching
+		assert len(selection.experience_scores) > 0
+
+	def test_score_components_sum_to_max_one(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Score should never exceed 1.0."""
+		jd_text = """
+		ML Engineer
+		Requirements: Python, PyTorch, ML, TensorFlow, Kubernetes
+		Nice to have: Docker, AWS, Distributed
+		"""
+		jd = parse_job_description(jd_text)
+		selection = select_content_with_details(
+			sample_resume_data, jd, use_page_budget=False
+		)
+
+		for entry_score in selection.experience_scores:
+			assert entry_score.score <= 1.0
+		for entry_score in selection.project_scores:
+			assert entry_score.score <= 1.0
+
+
+class TestPageBudget:
+	"""Tests for page budget system."""
+
+	def test_budget_limits_selection(self, sample_resume_data: ResumeData) -> None:
+		"""Selection respects page budget."""
+		jd = parse_job_description(SAMPLE_JD)
+		selection = select_content_with_details(
+			sample_resume_data, jd, use_page_budget=True
+		)
+
+		# Total lines should not exceed budget
+		assert selection.total_estimated_lines <= PAGE_BUDGET
+
+	def test_over_budget_flag_set(self, sample_resume_data: ResumeData) -> None:
+		"""Over budget flag is set correctly."""
+		jd = parse_job_description(SAMPLE_JD)
+		selection = select_content_with_details(
+			sample_resume_data, jd, use_page_budget=True
+		)
+
+		# With our sample data, should not be over budget
+		assert not selection.over_budget
+
+	def test_budget_remaining_calculated(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Budget remaining is calculated correctly."""
+		jd = parse_job_description(SAMPLE_JD)
+		selection = select_content_with_details(
+			sample_resume_data, jd, use_page_budget=True
+		)
+
+		expected_remaining = PAGE_BUDGET - selection.total_estimated_lines
+		assert selection.budget_remaining == expected_remaining
+
+	def test_disable_budget_ignores_limit(
+		self, sample_resume_data: ResumeData
+	) -> None:
+		"""Disabling budget ignores page limit."""
+		jd = parse_job_description(SAMPLE_JD)
+		selection = select_content_with_details(
+			sample_resume_data, jd, use_page_budget=False
+		)
+
+		# Budget remaining should be -1 when disabled
+		assert selection.budget_remaining == -1

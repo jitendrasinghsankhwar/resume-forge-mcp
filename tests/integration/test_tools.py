@@ -233,6 +233,94 @@ class TestIntelligenceTools:
 		assert len(data["keywords"]) > 0
 
 
+class TestPreviewContentSelection:
+	"""Integration tests for preview_content_selection tool."""
+
+	def test_preview_returns_selection_details(
+		self, integration_setup: tuple[ResumeStore, Path]
+	) -> None:
+		"""preview_content_selection returns detailed selection info."""
+		from latex_resume_mcp.server import preview_content_selection
+
+		jd_text = """
+		Software Engineer
+		Requirements: Python, PostgreSQL, AWS
+		Nice to have: Docker, Kubernetes
+		"""
+
+		result = preview_content_selection(jd_text)
+		data = json.loads(result)
+
+		assert "selected_experiences" in data
+		assert "selected_projects" in data
+		assert "total_estimated_lines" in data
+		assert "page_budget" in data
+		assert "budget_remaining" in data
+
+	def test_preview_shows_scores(
+		self, integration_setup: tuple[ResumeStore, Path]
+	) -> None:
+		"""preview_content_selection shows scores for each entry."""
+		from latex_resume_mcp.server import preview_content_selection
+
+		jd_text = "Software Engineer at TechCorp. Requirements: Python, SQL"
+
+		result = preview_content_selection(jd_text)
+		data = json.loads(result)
+
+		# Each experience should have score info
+		if data["selected_experiences"]:
+			exp = data["selected_experiences"][0]
+			assert "index" in exp
+			assert "score" in exp
+			assert "estimated_lines" in exp
+			assert "company" in exp
+
+	def test_preview_with_include_exclude(
+		self, integration_setup: tuple[ResumeStore, Path]
+	) -> None:
+		"""preview_content_selection respects include/exclude params."""
+		from latex_resume_mcp.server import preview_content_selection
+
+		jd_text = "Software Engineer"
+
+		result = preview_content_selection(
+			jd_text,
+			include_experiences=[1],
+			exclude_experiences=[0],
+		)
+		data = json.loads(result)
+
+		# Check that index 1 is included and marked as forced
+		indices = [e["index"] for e in data["selected_experiences"]]
+		assert 1 in indices
+		assert 0 not in indices
+
+		# Check forced flag
+		forced_entry = next(
+			e for e in data["selected_experiences"] if e["index"] == 1
+		)
+		assert forced_entry["forced"] is True
+
+	def test_preview_shows_jd_info(
+		self, integration_setup: tuple[ResumeStore, Path]
+	) -> None:
+		"""preview_content_selection shows parsed JD info."""
+		from latex_resume_mcp.server import preview_content_selection
+
+		jd_text = """
+		Software Engineer
+		Requirements: Python, AWS
+		"""
+
+		result = preview_content_selection(jd_text)
+		data = json.loads(result)
+
+		assert "required_skills" in data
+		assert "preferred_skills" in data
+		assert "keywords_found" in data
+
+
 class TestUtilityTools:
 	"""Integration tests for utility tools."""
 
@@ -248,4 +336,4 @@ class TestUtilityTools:
 		assert "has_resume_data" in data
 		assert data["has_resume_data"] is True
 		assert "tools_available" in data
-		assert len(data["tools_available"]) == 15
+		assert len(data["tools_available"]) == 16  # Now 16 with preview_content_selection
