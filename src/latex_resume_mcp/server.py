@@ -837,10 +837,179 @@ def get_config() -> str:
 			"preview_content_selection",
 			"assess_quality",
 			"get_config",
+			"get_work_history",
+			"get_work_history_report",
+			"search_accomplishments_for_resume",
 		],
 	}
 
 	return json.dumps(config, indent=2)
+
+
+# =============================================================================
+# Work History Tools (dev-journal integration)
+# =============================================================================
+
+
+@mcp.tool()
+def get_work_history(
+	project: str | None = None,
+	date_from: str | None = None,
+	date_to: str | None = None,
+	limit: int = 50,
+) -> str:
+	"""Get work history from dev-journal for resume content.
+
+	Queries your Claude Code session history to find accomplishments,
+	tools used, and projects worked on.
+
+	Args:
+		project: Filter to specific project name.
+		date_from: Start date (YYYY-MM-DD).
+		date_to: End date (YYYY-MM-DD).
+		limit: Maximum sessions to return (default 50).
+
+	Returns:
+		JSON with work sessions including goals, outcomes, and tools used.
+	"""
+	from latex_resume_mcp.integrations.dev_journal import query_work_history
+
+	try:
+		sessions = query_work_history(
+			project=project,
+			date_from=date_from,
+			date_to=date_to,
+			limit=limit,
+		)
+
+		if not sessions:
+			return json.dumps({
+				"error": "No work history found",
+				"hint": "Run sync_sessions in dev-journal MCP first",
+			})
+
+		result = {
+			"session_count": len(sessions),
+			"sessions": [
+				{
+					"project": s.project,
+					"date": s.started_at.date().isoformat(),
+					"duration_hours": round(s.duration_hours, 1),
+					"goal": s.goal[:200] + "..." if len(s.goal) > 200 else s.goal,
+					"outcome": s.outcome[:200] + "..." if len(s.outcome) > 200 else s.outcome,
+					"tools": s.tools_used[:10],
+				}
+				for s in sessions
+			],
+		}
+
+		return json.dumps(result, indent=2)
+
+	except Exception as e:
+		return json.dumps({"error": f"Failed to query work history: {str(e)}"})
+
+
+@mcp.tool()
+def get_work_history_report(
+	date_from: str | None = None,
+	date_to: str | None = None,
+) -> str:
+	"""Generate comprehensive work history report for resume generation.
+
+	Aggregates all your Claude Code sessions by project, showing total time,
+	tools used, and key accomplishments extracted from session outcomes.
+
+	Args:
+		date_from: Start date filter (YYYY-MM-DD).
+		date_to: End date filter (YYYY-MM-DD).
+
+	Returns:
+		JSON with project summaries, total hours, and tool usage stats.
+	"""
+	from latex_resume_mcp.integrations.dev_journal import (
+		get_work_history_report as _get_report,
+	)
+
+	try:
+		report = _get_report(date_from=date_from, date_to=date_to)
+
+		if report.total_sessions == 0:
+			return json.dumps({
+				"error": "No work history found",
+				"hint": "Run sync_sessions in dev-journal MCP first",
+			})
+
+		result = {
+			"summary": {
+				"total_sessions": report.total_sessions,
+				"total_hours": report.total_hours,
+				"date_range": report.date_range,
+			},
+			"top_tools": report.all_tools[:15],
+			"projects": [
+				{
+					"name": p.project,
+					"sessions": p.total_sessions,
+					"hours": p.total_hours,
+					"date_range": p.date_range,
+					"top_tools": p.top_tools[:5],
+					"accomplishments": p.key_accomplishments[:5],
+				}
+				for p in report.projects[:20]
+			],
+		}
+
+		return json.dumps(result, indent=2)
+
+	except Exception as e:
+		return json.dumps({"error": f"Failed to generate report: {str(e)}"})
+
+
+@mcp.tool()
+def search_accomplishments_for_resume(
+	keywords: str,
+	limit: int = 20,
+) -> str:
+	"""Search work history for accomplishments matching keywords.
+
+	Use this when tailoring a resume to find relevant past work.
+	For example, search for "PyTorch", "distributed", "API" to find
+	matching sessions.
+
+	Args:
+		keywords: Comma-separated keywords to search for.
+		limit: Maximum results to return (default 20).
+
+	Returns:
+		JSON with matching accomplishments by project and date.
+	"""
+	from latex_resume_mcp.integrations.dev_journal import search_accomplishments
+
+	try:
+		keyword_list = [k.strip() for k in keywords.split(",") if k.strip()]
+		if not keyword_list:
+			return json.dumps({"error": "No keywords provided"})
+
+		results = search_accomplishments(keyword_list, limit=limit)
+
+		if not results:
+			return json.dumps({
+				"keywords": keyword_list,
+				"matches": [],
+				"hint": "Try broader keywords or check dev-journal sync status",
+			})
+
+		return json.dumps({
+			"keywords": keyword_list,
+			"match_count": len(results),
+			"matches": [
+				{"project": proj, "date": date, "accomplishment": acc}
+				for proj, date, acc in results
+			],
+		}, indent=2)
+
+	except Exception as e:
+		return json.dumps({"error": f"Search failed: {str(e)}"})
 
 
 def main() -> None:

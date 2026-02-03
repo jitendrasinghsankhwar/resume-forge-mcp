@@ -336,4 +336,4 @@ class TestUtilityTools:
 		assert "has_resume_data" in data
 		assert data["has_resume_data"] is True
 		assert "tools_available" in data
-		assert len(data["tools_available"]) == 16  # Now 16 with preview_content_selection
+		assert len(data["tools_available"]) == 19  # 16 + 3 work history tools
