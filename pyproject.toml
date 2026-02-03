@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "latex-resume-mcp"
-version = "0.1.0"
-description = "MCP server for creating, editing, and compiling LaTeX resumes"
+version = "0.2.0"
+description = "MCP server for intelligent LaTeX resume generation with visual verification"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -17,13 +17,16 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
+    "pydantic>=2.0.0",
+    "jinja2>=3.1.0",
+    "pymupdf>=1.24.0",
 ]
 
 [project.scripts]
@@ -43,3 +46,29 @@ include = [
     "/README.md",
     "/LICENSE",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+indent-width = 4
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+ignore = ["W191", "E101"]
+
+[tool.ruff.format]
+indent-style = "tab"
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[tool.bandit]
+exclude_dirs = ["tests"]
