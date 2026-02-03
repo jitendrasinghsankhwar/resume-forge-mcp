@@ -20,6 +20,77 @@ from latex_resume_mcp.models.analysis import (
 from latex_resume_mcp.models.resume import ResumeData
 
 
+def _check_xyz_structure(text: str) -> bool:
+	"""Check if bullet follows XYZ impact structure: did X, with/using Y, achieving Z.
+
+	The XYZ format ensures bullets have:
+	- X: What you did (action)
+	- Y: How you did it (method/tools)
+	- Z: Impact/result (quantified outcome)
+	"""
+	text_lower = text.lower()
+
+	# Method indicators (the "Y" - how you did it)
+	method_patterns = [
+		r"\busing\b",
+		r"\bwith\b",
+		r"\bvia\b",
+		r"\bleveraging\b",
+		r"\butilizing\b",
+		r"\bthrough\b",
+		r"\bin\b\s+\w+",  # "in Python", "in React"
+	]
+	has_method = any(re.search(p, text_lower) for p in method_patterns)
+
+	# Impact indicators (the "Z" - the result)
+	impact_patterns = [
+		r"\bachieving\b",
+		r"\bresulting\s+in\b",
+		r"\breducing\b",
+		r"\bimproving\b",
+		r"\bincreasing\b",
+		r"\bsaving\b",
+		r"\benabling\b",
+		r"\bdelivering\b",
+		r"\bdriving\b",
+		r",\s*(which|that)\s+",  # "which reduced", "that improved"
+		r"\d+%",  # Direct percentage impact
+		r"\d+x\b",  # Multiplier impact
+		r"\d+\s*(hrs?|hours?|minutes?)\b",  # Time savings
+	]
+	has_impact = any(re.search(p, text_lower) for p in impact_patterns)
+
+	return has_method and has_impact
+
+
+def _check_line_orphan(text: str, chars_per_line: int = 95) -> bool:
+	"""Check if bullet would create an orphaned word on the last line.
+
+	An orphan is when the last line has very few characters (< 20% of line width),
+	creating wasted whitespace. This is a heuristic based on character count.
+
+	Args:
+		text: The bullet text.
+		chars_per_line: Approximate characters per line (95 for Jake template at 11pt).
+
+	Returns:
+		True if last line would be orphaned (< 20% full).
+	"""
+	# Rough estimate: strip LaTeX commands for length calculation
+	clean_text = re.sub(r"\$[^$]+\$", "X" * 3, text)  # Math mode -> 3 chars
+	clean_text = re.sub(r"\\[a-zA-Z]+\{[^}]*\}", lambda m: "X" * 5, clean_text)  # Commands
+
+	length = len(clean_text)
+	if length <= chars_per_line:
+		return False  # Single line, no orphan possible
+
+	# Calculate last line length
+	last_line_len = length % chars_per_line
+	orphan_threshold = chars_per_line * 0.20  # Less than 20% = orphan
+
+	return 0 < last_line_len < orphan_threshold
+
+
 def score_bullet(text: str) -> BulletScore:
 	"""Score a single resume bullet point for quality.
 
@@ -27,6 +98,8 @@ def score_bullet(text: str) -> BulletScore:
 	- Starts with strong action verb
 	- Contains quantifiable metric/result
 	- Has technical detail
+	- Follows XYZ impact structure (did X, with Y, for Z)
+	- No orphaned words on last line
 	- Appropriate length (15-150 chars)
 
 	Args:
@@ -60,6 +133,20 @@ def score_bullet(text: str) -> BulletScore:
 	]
 	has_technical_detail = any(re.search(p, text) for p in tech_indicators)
 
+	# Check XYZ impact structure
+	has_xyz_structure = _check_xyz_structure(text)
+	if not has_xyz_structure:
+		suggestions.append(
+			"Use XYZ format: '[Action] [task] using [tool], [achieving] [impact]'"
+		)
+
+	# Check for line orphans
+	has_line_orphan = _check_line_orphan(text)
+	if has_line_orphan:
+		suggestions.append(
+			"Adjust length to fill line (add detail or trim to avoid orphaned words)"
+		)
+
 	# Check length
 	length = len(text)
 	appropriate_length = 15 <= length <= 150
@@ -70,11 +157,14 @@ def score_bullet(text: str) -> BulletScore:
 		suggestions.append("Bullet is too long; consider splitting or condensing")
 
 	# Calculate overall score (0-1)
+	# Weights: action verb 20%, metric 25%, technical 15%, XYZ 25%, length 10%, no orphan 5%
 	score_components = [
-		(has_action_verb, 0.3),
-		(has_metric, 0.35),
-		(has_technical_detail, 0.2),
-		(appropriate_length, 0.15),
+		(has_action_verb, 0.20),
+		(has_metric, 0.25),
+		(has_technical_detail, 0.15),
+		(has_xyz_structure, 0.25),
+		(appropriate_length, 0.10),
+		(not has_line_orphan, 0.05),
 	]
 	score = sum(weight for present, weight in score_components if present)
 
@@ -83,6 +173,8 @@ def score_bullet(text: str) -> BulletScore:
 		has_action_verb=has_action_verb,
 		has_metric=has_metric,
 		has_technical_detail=has_technical_detail,
+		has_xyz_structure=has_xyz_structure,
+		has_line_orphan=has_line_orphan,
 		appropriate_length=appropriate_length,
 		score=round(score, 2),
 		suggestions=suggestions,

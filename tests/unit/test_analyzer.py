@@ -87,8 +87,10 @@ class TestScoreBullet:
 		"""Empty bullet doesn't crash."""
 		score = score_bullet("")
 
-		assert score.score == 0.0
+		# Empty bullet gets 0.05 for "no orphan" (empty text can't have orphan)
+		assert score.score == 0.05
 		assert score.appropriate_length is False
+		assert score.has_line_orphan is False
 
 	def test_technical_detail_acronym(self) -> None:
 		"""Acronyms are detected as technical detail."""
@@ -96,6 +98,63 @@ class TestScoreBullet:
 		score = score_bullet(bullet)
 
 		assert score.has_technical_detail is True
+
+	def test_xyz_structure_detected(self) -> None:
+		"""XYZ format (did X using Y, achieving Z) is detected."""
+		bullet = "Built inference pipeline using PyTorch, achieving 14x throughput improvement"
+		score = score_bullet(bullet)
+
+		assert score.has_xyz_structure is True
+
+	def test_xyz_structure_with_reducing(self) -> None:
+		"""XYZ format with 'reducing' impact indicator."""
+		bullet = "Optimized queries using index tuning, reducing latency by 40%"
+		score = score_bullet(bullet)
+
+		assert score.has_xyz_structure is True
+
+	def test_xyz_structure_missing_method(self) -> None:
+		"""Bullet without method indicator lacks XYZ structure."""
+		bullet = "Built inference pipeline achieving 14x throughput improvement"
+		score = score_bullet(bullet)
+
+		assert score.has_xyz_structure is False
+
+	def test_xyz_structure_missing_impact(self) -> None:
+		"""Bullet without impact indicator lacks XYZ structure."""
+		bullet = "Built inference pipeline using PyTorch and CUDA kernels"
+		score = score_bullet(bullet)
+
+		assert score.has_xyz_structure is False
+
+	def test_line_orphan_detected(self) -> None:
+		"""Bullet that creates orphaned word on last line is detected."""
+		# 95 chars per line, ~105 chars total with "improvement" wrapping alone
+		bullet = (
+			"Built distributed inference pipeline using custom scheduling "
+			"kernels for heterogeneous improvement"
+		)
+		score = score_bullet(bullet)
+
+		assert score.has_line_orphan is True
+
+	def test_no_orphan_when_line_filled(self) -> None:
+		"""Bullet that fills lines well has no orphan."""
+		# ~115 chars, wrapping to leave ~20 chars on line 2 (>20% = no orphan)
+		bullet = (
+			"Built distributed inference pipeline using PyTorch with custom "
+			"CUDA scheduling, achieving 14x throughput at batch 16"
+		)
+		score = score_bullet(bullet)
+
+		assert score.has_line_orphan is False
+
+	def test_no_orphan_single_line(self) -> None:
+		"""Single-line bullet has no orphan."""
+		bullet = "Built inference pipeline using PyTorch"
+		score = score_bullet(bullet)
+
+		assert score.has_line_orphan is False
 
 
 class TestCheckATS:

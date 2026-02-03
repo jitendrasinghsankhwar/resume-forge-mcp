@@ -38,17 +38,34 @@ ALL_ACTION_VERBS: set[str] = set()
 for category_verbs in ACTION_VERBS.values():
 	ALL_ACTION_VERBS.update(v.lower() for v in category_verbs)
 
-# Bullet point quality rubric
-BULLET_RUBRIC: dict[str, str] = {
-	"structure": "Action Verb + Technical Task + Quantifiable Result",
+# Bullet point quality rubric - XYZ Impact Framework
+# X = What you did (action verb + task)
+# Y = How you did it (method, tool, technology)
+# Z = The impact (quantified result, business outcome)
+BULLET_RUBRIC: dict[str, str | list[str]] = {
+	"structure": "Action Verb + Task + Method/Tool + Quantified Impact (XYZ format)",
+	"xyz_format": "[Did X] using/with [Y method/tool], achieving/resulting in [Z impact]",
 	"example_good": (
-		"Optimized PostgreSQL queries reducing API latency by 40% "
-		"for 10K daily active users"
+		"Optimized PostgreSQL queries using index tuning and query caching, "
+		"reducing API latency by 40% for 10K daily active users"
 	),
 	"example_weak": "Worked on database optimization",
+	"examples_xyz": [
+		"Built inference pipeline using PyTorch and CUDA, achieving 14x throughput at batch 16",
+		"Designed RAG workflow with AWS Bedrock, automating KPI extraction and saving 10 hrs/week",
+		"Profiled GPU bottlenecks using NSight on H100s, identifying 3x speedup for SGLang",
+	],
+	"method_indicators": [
+		"using", "with", "via", "leveraging", "utilizing", "through", "in [tool]"
+	],
+	"impact_indicators": [
+		"achieving", "resulting in", "reducing", "improving", "increasing",
+		"saving", "enabling", "delivering", "driving"
+	],
 	"min_length": "15 characters",
 	"max_length": "150 characters",
-	"ideal_length": "80-120 characters",
+	"ideal_length": "90-120 characters (fills line without orphan)",
+	"avoid_orphans": "Adjust length to fill lines; avoid orphaned words on new line",
 }
 
 # ATS (Applicant Tracking System) compatibility rules

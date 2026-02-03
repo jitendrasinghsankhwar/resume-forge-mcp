@@ -14,6 +14,14 @@ class BulletScore(BaseModel):
 	has_technical_detail: bool = Field(
 		default=False, description="Mentions specific technology or method"
 	)
+	has_xyz_structure: bool = Field(
+		default=False,
+		description="Follows XYZ impact format: did X, with Y, achieving Z",
+	)
+	has_line_orphan: bool = Field(
+		default=False,
+		description="Last line has orphaned word(s) creating whitespace",
+	)
 	appropriate_length: bool = Field(
 		default=False, description="Between 15 and 150 characters"
 	)

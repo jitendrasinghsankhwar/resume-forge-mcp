@@ -51,30 +51,66 @@ def escape_latex(text: str) -> str:
 
 	Handles the common case where text contains & or % that aren't
 	intended as LaTeX commands. Leaves already-escaped sequences alone.
+
+	CRITICAL: Always escapes % as \\% since % is a LaTeX comment character
+	that will cause compilation to fail if unescaped.
 	"""
 	if not text:
 		return text
-
-	# Don't escape text that already contains LaTeX commands
-	for pattern in LATEX_PASSTHROUGH_PATTERNS:
-		if re.search(pattern, text):
-			return text
 
 	result = []
 	i = 0
 	while i < len(text):
 		char = text[i]
+
+		# Check for already-escaped sequences (backslash + char)
 		if char == "\\" and i + 1 < len(text):
-			# Already escaped, pass through
-			result.append(char)
-			result.append(text[i + 1])
-			i += 2
+			next_char = text[i + 1]
+			# Check if this is a LaTeX command we should preserve
+			# Look ahead to see if it's a known command like \textbf, \leftrightarrow, etc.
+			remaining = text[i:]
+			is_latex_cmd = False
+			for pattern in LATEX_PASSTHROUGH_PATTERNS:
+				if re.match(pattern, remaining):
+					is_latex_cmd = True
+					break
+			# Also check for math mode and common LaTeX commands
+			if remaining.startswith("\\leftrightarrow") or remaining.startswith("\\rightarrow"):
+				is_latex_cmd = True
+			if any(remaining.startswith(p) for p in ["\\$", "\\%", "\\&"]):
+				is_latex_cmd = True
+
+			if is_latex_cmd or next_char in "&%$#_":
+				# Already escaped special char or LaTeX command, pass through
+				result.append(char)
+				result.append(next_char)
+				i += 2
+			else:
+				# Some other backslash sequence, preserve it
+				result.append(char)
+				i += 1
+
+		# Check for math mode ($...$) - preserve contents
+		elif char == "$":
+			# Find closing $
+			end = text.find("$", i + 1)
+			if end != -1:
+				# Preserve entire math mode
+				result.append(text[i : end + 1])
+				i = end + 1
+			else:
+				# No closing $, escape it
+				result.append(LATEX_SPECIAL["$"])
+				i += 1
+
+		# Escape special characters
 		elif char in LATEX_SPECIAL:
 			result.append(LATEX_SPECIAL[char])
 			i += 1
 		else:
 			result.append(char)
 			i += 1
+
 	return "".join(result)
 
 
