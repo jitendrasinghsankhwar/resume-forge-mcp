@@ -78,30 +78,141 @@ def _parse_json_field(value: str) -> list[str]:
 def _extract_accomplishment(outcome: str) -> str | None:
 	"""Extract a concise accomplishment from session outcome.
 
-	Looks for concrete results, not status updates.
+	Looks for concrete results with metrics, not conversational status updates.
 	"""
-	if not outcome or len(outcome) < 20:
+	import re
+
+	if not outcome or len(outcome) < 30:
 		return None
 
-	# Skip non-accomplishment outcomes
+	outcome_lower = outcome.lower()
+
+	# Skip non-accomplishment outcomes (conversational/error messages)
 	skip_phrases = [
 		"session with no",
 		"hit your limit",
 		"invalid api key",
-		"error",
-		"failed",
+		"error:",
+		"failed to",
 		"couldn't",
+		"i'm ready to help",
+		"i'm claude",
+		"hello!",
+		"hey bro",
+		"warmup",
+		"what would you like",
+		"i understand",
+		"let me ",
+		"i'll ",
+		"i will ",
+		"i need ",
+		"bro, i",
+		"waiting for",
+		"pending",
 	]
-	outcome_lower = outcome.lower()
 	if any(phrase in outcome_lower for phrase in skip_phrases):
 		return None
 
-	# Take first sentence/line that looks like an accomplishment
+	# Achievement indicators - lines with these are more likely real accomplishments
+	achievement_patterns = [
+		r"\d+\s*(files?|tests?|functions?|endpoints?|components?)",  # "20 files"
+		r"\d+%",  # percentages
+		r"\d+x\b",  # multipliers
+		r"\d+\s*(hours?|hrs?|minutes?|seconds?)",  # time
+		r"implemented|created|built|developed|designed|integrated",
+		r"reduced|improved|increased|optimized|enhanced",
+		r"successfully|completed|finished|deployed|shipped",
+		r"added|removed|fixed|updated|refactored",
+	]
+
+	# Summary section indicators
+	summary_markers = [
+		"summary:",
+		"what was accomplished:",
+		"what was created:",
+		"what was implemented:",
+		"here's what was",
+		"changes made:",
+		"key changes:",
+		"files created",
+		"files modified",
+		"here's the summary",
+	]
+
 	lines = outcome.split("\n")
-	for line in lines[:3]:
+
+	# First, try to find a summary section and extract from it
+	in_summary = False
+	summary_items: list[str] = []
+
+	for line in lines:
+		line_stripped = line.strip()
+		line_lower = line_stripped.lower()
+
+		# Check if we're entering a summary section
+		if any(marker in line_lower for marker in summary_markers):
+			in_summary = True
+			continue
+
+		# Collect bullet points from summary section (including markdown bold bullets)
+		if in_summary:
+			# Handle various bullet formats:
+			# "- item", "* item", "- **item**", "1. item", "- **item** - description"
+			item = None
+
+			# Numbered list: "1. item" or "1. **item**"
+			num_match = re.match(r"^\d+\.\s*\*?\*?(.+?)\*?\*?\s*$", line_stripped)
+			if num_match:
+				item = num_match.group(1).strip()
+
+			# Bullet list: "- item" or "- **item**" or "- **item** - detail"
+			elif line_stripped.startswith(("-", "*", "•")):
+				# Remove bullet and clean markdown
+				cleaned = line_stripped.lstrip("-*• ").strip()
+				# Remove markdown bold markers
+				cleaned = re.sub(r"\*\*([^*]+)\*\*", r"\1", cleaned)
+				if cleaned:
+					item = cleaned
+
+			if item and len(item) > 15:
+				# Skip items that are just file paths or single words
+				if "/" in item and item.count("/") > item.count(" "):
+					continue
+				if not any(skip in item.lower() for skip in skip_phrases[:10]):
+					summary_items.append(item)
+					if len(summary_items) >= 5:
+						break
+
+		# Stop collecting if we hit a new section header after summary
+		if in_summary and line_stripped.startswith("#") and summary_items:
+			break
+
+	# Return best summary item if found
+	if summary_items:
+		# Prefer items with metrics/numbers
+		for item in summary_items:
+			if any(re.search(p, item.lower()) for p in achievement_patterns[:4]):
+				return item[:150] if len(item) > 150 else item
+		# Prefer longer, more descriptive items
+		best = max(summary_items, key=len)
+		return best[:150] if len(best) > 150 else best
+
+	# Otherwise, look for lines with achievement indicators
+	for line in lines[:10]:
 		line = line.strip()
-		if len(line) > 30 and not line.startswith(("-", "*", "#", "```")):
-			# Truncate to reasonable length
+		if len(line) < 30 or line.startswith(("#", "```", ">")):
+			continue
+
+		# Skip conversational lines
+		if any(skip in line.lower() for skip in skip_phrases):
+			continue
+
+		# Check for achievement patterns
+		has_achievement = any(re.search(p, line.lower()) for p in achievement_patterns)
+		if has_achievement:
+			# Clean up the line
+			line = re.sub(r"^\*\*|\*\*$", "", line)  # Remove markdown bold
+			line = re.sub(r"^[-*•]\s*", "", line)  # Remove bullet prefix
 			if len(line) > 150:
 				line = line[:147] + "..."
 			return line
