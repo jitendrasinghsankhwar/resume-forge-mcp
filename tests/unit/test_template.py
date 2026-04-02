@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from latex_resume_mcp.models.resume import (
+from resume_forge_mcp.models.resume import (
 	ContactInfo,
 	Education,
 	ResumeData,
 	ResumeVariant,
 	SkillCategory,
 )
-from latex_resume_mcp.templates.engine import (
+from resume_forge_mcp.templates.engine import (
 	_resolve_variant,
 	create_jinja_env,
 	escape_latex,

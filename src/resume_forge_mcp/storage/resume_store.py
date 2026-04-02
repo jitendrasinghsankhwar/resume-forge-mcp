@@ -6,23 +6,25 @@ import json
 import logging
 from pathlib import Path
 
-from latex_resume_mcp.models.resume import ResumeData, ResumeVariant
+from resume_forge_mcp.models.resume import ResumeData, ResumeVariant
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DATA_DIR = Path.home() / ".latex-resume-mcp"
 DATA_FILENAME = "resume_data.json"
 VARIANTS_DIR = "variants"
+
+
+def _default_data_dir() -> Path:
+	"""Get default data directory lazily."""
+	return Path.home() / ".latex-resume-mcp"
 
 
 class ResumeStore:
 	"""Manages resume data and variants on disk as JSON files."""
 
 	def __init__(self, data_dir: Path | None = None) -> None:
-		self._data_dir = data_dir or DEFAULT_DATA_DIR
-		self._data_dir.mkdir(parents=True, exist_ok=True)
+		self._data_dir = data_dir or _default_data_dir()
 		self._variants_dir = self._data_dir / VARIANTS_DIR
-		self._variants_dir.mkdir(parents=True, exist_ok=True)
 
 	@property
 	def data_path(self) -> Path:
@@ -41,6 +43,7 @@ class ResumeStore:
 
 	def save_data(self, data: ResumeData) -> None:
 		"""Save master resume data to disk."""
+		self._data_dir.mkdir(parents=True, exist_ok=True)
 		self.data_path.write_text(
 			data.model_dump_json(indent=2),
 			encoding="utf-8",
@@ -66,6 +69,7 @@ class ResumeStore:
 
 	def save_variant(self, variant: ResumeVariant) -> None:
 		"""Save a variant to disk."""
+		self._variants_dir.mkdir(parents=True, exist_ok=True)
 		path = self._variants_dir / f"{variant.name}.json"
 		path.write_text(
 			variant.model_dump_json(indent=2),

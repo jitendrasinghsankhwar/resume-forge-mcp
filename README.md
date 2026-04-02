@@ -1,202 +1,113 @@
-# LaTeX Resume MCP
+# Resume Forge MCP
 
-An MCP (Model Context Protocol) server for intelligent LaTeX resume generation with visual verification, quality scoring, and job description tailoring.
+An MCP (Model Context Protocol) server for intelligent LaTeX resume generation with multiple template styles, quality scoring, and job description tailoring.
 
 ## Features
 
-- **Data-driven resumes**: Store resume content in JSON, generate LaTeX on demand
-- **Visual verification**: Preview rendered PDFs as images directly in Claude
-- **Quality scoring**: Bullet analysis, ATS compatibility checks, keyword matching
-- **Job tailoring**: Auto-select and prioritize content based on job descriptions
-- **Variant management**: Create multiple resume versions for different roles
-- **LaTeX compilation**: Generate publication-quality PDFs using pdflatex
+- **3 built-in templates**: Modern (color accents), Classic (traditional), Minimal (no-frills)
+- **Overleaf integration**: Browse and fetch 350+ templates dynamically
+- **Multi-format import**: Import resume data from .tex, .pdf, or .docx files
+- **Quality scoring**: Bullet analysis, ATS compatibility, keyword matching
+- **Job tailoring**: Auto-select and rank content based on job descriptions
+- **Visual preview**: Compile to PDF and preview as images directly in your AI assistant
 
 ## Installation
 
-### Using uvx (recommended)
-
 ```bash
-uvx latex-resume-mcp
+uvx resume-forge-mcp
 ```
 
-### Using pip
+With PDF and DOCX import support:
 
 ```bash
-pip install latex-resume-mcp
+uvx --with pymupdf --with python-docx resume-forge-mcp
 ```
 
 ## Configuration
 
-Add to your Claude Desktop config file:
-
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-### Using uvx
+Add to your AI assistant's MCP config:
 
 ```json
 {
   "mcpServers": {
-    "latex-resume": {
+    "resume-forge": {
       "command": "uvx",
-      "args": ["latex-resume-mcp"]
-    }
-  }
-}
-```
-
-### Using pip installation
-
-```json
-{
-  "mcpServers": {
-    "latex-resume": {
-      "command": "latex-resume-mcp"
-    }
-  }
-}
-```
-
-### Custom directories (optional)
-
-```json
-{
-  "mcpServers": {
-    "latex-resume": {
-      "command": "uvx",
-      "args": ["latex-resume-mcp"],
+      "args": ["resume-forge-mcp"],
       "env": {
-        "LATEX_RESUME_DATA_DIR": "/path/to/data",
-        "LATEX_RESUME_OUTPUT_DIR": "/path/to/output"
+        "RESUME_DATA_DIR": "/path/to/data",
+        "RESUME_TEMPLATE_DIR": "/path/to/templates",
+        "RESUME_OUTPUT_DIR": "/path/to/output"
       }
     }
   }
 }
 ```
 
+### Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RESUME_DATA_DIR` | `~/.resume-forge/data` | Resume data JSON |
+| `RESUME_TEMPLATE_DIR` | `~/.resume-forge/templates` | Fetched Overleaf templates |
+| `RESUME_OUTPUT_DIR` | `~/.resume-forge/output` | Generated .tex and .pdf files |
+
+All env vars are optional — defaults to `~/.resume-forge/` subdirectories.
+
 ## Prerequisites
 
-### LaTeX Installation
+For PDF compilation, install LaTeX:
 
-To compile resumes to PDF, you need LaTeX installed:
+- **macOS**: `brew install --cask mactex`
+- **Ubuntu**: `sudo apt install texlive-latex-base texlive-latex-extra texlive-fonts-extra`
+- **Windows**: Install [MiKTeX](https://miktex.org/)
 
-**macOS:**
-```bash
-brew install --cask mactex
-# or for a smaller installation:
-brew install --cask basictex
-```
+## Tools (11)
 
-**Ubuntu/Debian:**
-```bash
-sudo apt install texlive-latex-base texlive-latex-extra texlive-fonts-extra
-```
-
-**Windows:**
-Download and install [MiKTeX](https://miktex.org/)
-
-## Available Tools (15)
+### Templates
+| Tool | Description |
+|------|-------------|
+| `list_templates` | List built-in templates (modern/classic/minimal) + Overleaf info |
+| `browse_overleaf_templates` | Browse 350+ Overleaf templates by category |
+| `fetch_overleaf_template` | Download an Overleaf template source |
 
 ### Data Management
-
 | Tool | Description |
 |------|-------------|
-| `import_from_latex_file` | Parse existing .tex file into structured JSON data |
+| `import_resume` | Import from .tex, .pdf, or .docx into structured data |
 | `get_resume_data` | Get the master resume data pool |
-| `update_resume_data` | Add, edit, or remove entries (experience, projects, etc.) |
-| `list_variants` | List all saved resume variants |
-| `get_variant` | Get details of a specific variant |
-| `save_variant` | Create or update a variant configuration |
+| `update_resume_data` | Add, edit, or remove entries in any section |
 
 ### Generation & Compilation
-
 | Tool | Description |
 |------|-------------|
-| `generate_resume` | Generate .tex file from data (optionally using a variant) |
-| `compile_resume_tex` | Compile .tex to PDF using pdflatex |
-| `compile_and_preview` | Compile and return preview images |
-| `preview_resume` | Preview an existing PDF as images |
+| `generate_resume` | Render data to .tex using selected template |
+| `compile_and_preview` | Compile to PDF and return preview image |
+| `generate_tailored_resume` | Parse JD, select content, generate tailored resume |
 
-### Intelligence
-
+### Analysis & Config
 | Tool | Description |
 |------|-------------|
-| `score_resume_quality` | Score bullets, check ATS compatibility, match keywords |
-| `parse_job_description_text` | Extract keywords and requirements from job description |
-| `generate_tailored_resume` | Auto-select content based on JD, compile, and preview |
+| `score_resume_quality` | Score bullets, ATS compatibility, keyword matching |
+| `get_config` | Show configuration and tool availability |
 
-### Utility
-
-| Tool | Description |
-|------|-------------|
-| `assess_quality` | Run programmatic checks (page count, encoding, overflow) |
-| `get_config` | Show current configuration and available tools |
-
-## Usage Examples
-
-### Basic Workflow
+## Usage
 
 ```
-> Get my resume data
-Shows all stored experience, projects, education, skills
+> List available templates
+→ modern, classic, minimal + Overleaf gallery
 
-> Generate my resume and compile it
-Creates .tex file and compiles to PDF
+> Import my resume from resume.tex
+→ Extracts contact, education, experience, skills into structured data
 
-> Preview my resume
-Returns rendered images of each page
-```
-
-### Quality Improvement
-
-```
-> Score my resume quality
-Returns bullet scores, ATS report, improvement suggestions
+> Generate my resume using the classic template
+→ Creates .tex file using classic layout
 
 > Score my resume against keywords: Python, AWS, Kubernetes
-Shows keyword match percentage and missing terms
+→ Returns quality scores, ATS report, keyword match percentage
+
+> Generate a tailored resume for this job description: [paste JD]
+→ Auto-selects relevant experience, generates and compiles
 ```
-
-### Job Tailoring
-
-```
-> Parse this job description: [paste JD text]
-Extracts title, required skills, preferred skills, keywords
-
-> Generate a tailored resume for this job description
-Auto-selects most relevant experience/projects, reorders skills, compiles
-```
-
-### Variant Management
-
-```
-> List my resume variants
-Shows: swe, ml_engineer, backend, etc.
-
-> Save a new variant called "startup" with experiences 0,1,3
-Creates variant configuration
-
-> Generate my resume using the startup variant
-Uses variant's content selection and ordering
-```
-
-## Data Model
-
-Resume data is stored as JSON with these sections:
-
-- **contact**: Name, email, phone, LinkedIn, GitHub
-- **education**: Degrees with GPA, dates, coursework
-- **publications**: Academic publications
-- **experience**: Work history with bullets and tags
-- **projects**: Personal/open-source projects with tags
-- **skills**: Categorized skill lists
-
-Each experience and project can have **tags** (e.g., `["swe", "ml", "cloud"]`) for intelligent content selection.
-
-## Default Directories
-
-- **Data**: `~/.latex-resumes/data/` (resume JSON and variants)
-- **Output**: `~/.latex-resumes/output/` (generated .tex and .pdf files)
 
 ## License
 

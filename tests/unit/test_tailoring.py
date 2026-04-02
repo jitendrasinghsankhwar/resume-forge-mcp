@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from latex_resume_mcp.intelligence.tailoring import (
+from resume_forge_mcp.intelligence.tailoring import (
 	PAGE_BUDGET,
 	estimate_entry_lines,
 	generate_tailored_variant,
@@ -10,8 +10,8 @@ from latex_resume_mcp.intelligence.tailoring import (
 	select_content_for_jd,
 	select_content_with_details,
 )
-from latex_resume_mcp.models.analysis import JobDescription
-from latex_resume_mcp.models.resume import Experience, Project, ResumeData
+from resume_forge_mcp.models.analysis import JobDescription
+from resume_forge_mcp.models.resume import Experience, Project, ResumeData
 
 SAMPLE_JD = """
 Senior Software Engineer

@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from latex_resume_mcp.models.resume import (
+from resume_forge_mcp.models.resume import (
 	ResumeData,
 	ResumeVariant,
 )
-from latex_resume_mcp.storage.resume_store import ResumeStore
-from latex_resume_mcp.storage.tex_import import (
+from resume_forge_mcp.storage.resume_store import ResumeStore
+from resume_forge_mcp.storage.tex_import import (
 	_extract_items,
 	_parse_heading,
 	_parse_skills,

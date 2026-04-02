@@ -1,13 +1,17 @@
-"""PDF to PNG preview rendering using PyMuPDF."""
+"""PDF to PNG preview rendering using PyMuPDF (optional dependency)."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
-import fitz  # type: ignore[import-untyped]  # PyMuPDF
-
 logger = logging.getLogger(__name__)
+
+try:
+	import fitz  # type: ignore[import-untyped]  # PyMuPDF
+	HAS_PYMUPDF = True
+except ImportError:
+	HAS_PYMUPDF = False
 
 # Default rendering DPI for preview images
 DEFAULT_DPI = 200
@@ -32,8 +36,11 @@ def render_pdf_to_png(
 
 	Raises:
 		FileNotFoundError: If PDF doesn't exist.
-		ValueError: If page_number is out of range.
+		ImportError: If pymupdf is not installed.
 	"""
+	if not HAS_PYMUPDF:
+		raise ImportError("pymupdf is required for preview. Install with: pip install resume-forge-mcp[preview]")
+
 	if not pdf_path.exists():
 		raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
@@ -68,6 +75,9 @@ def get_pdf_info(pdf_path: Path) -> dict[str, object]:
 	Returns:
 		Dict with page_count, width, height (of first page in points).
 	"""
+	if not HAS_PYMUPDF:
+		raise ImportError("pymupdf is required for PDF info. Install with: pip install resume-forge-mcp[preview]")
+
 	if not pdf_path.exists():
 		raise FileNotFoundError(f"PDF not found: {pdf_path}")
 

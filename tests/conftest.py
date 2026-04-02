@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from latex_resume_mcp.models.resume import (
+from resume_forge_mcp.models.resume import (
 	ContactInfo,
 	Education,
 	Experience,

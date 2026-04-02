@@ -1,13 +1,13 @@
 """Resume intelligence: scoring, analysis, and tailoring."""
 
-from latex_resume_mcp.intelligence.analyzer import (
+from resume_forge_mcp.intelligence.analyzer import (
 	check_ats,
 	estimate_page_fullness,
 	match_keywords,
 	score_bullet,
 	score_resume,
 )
-from latex_resume_mcp.intelligence.tailoring import (
+from resume_forge_mcp.intelligence.tailoring import (
 	generate_tailored_variant,
 	parse_job_description,
 	select_content_for_jd,

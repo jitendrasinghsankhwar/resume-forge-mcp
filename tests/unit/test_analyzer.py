@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from latex_resume_mcp.intelligence.analyzer import (
+from resume_forge_mcp.intelligence.analyzer import (
 	check_ats,
 	estimate_page_fullness,
 	match_keywords,
 	score_bullet,
 	score_resume,
 )
-from latex_resume_mcp.models.resume import (
+from resume_forge_mcp.models.resume import (
 	ContactInfo,
 	Experience,
 	ResumeData,

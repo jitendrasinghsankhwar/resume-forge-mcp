@@ -14,6 +14,7 @@ class ContactInfo(BaseModel):
 	linkedin: str = Field(default="", description="LinkedIn URL or handle")
 	github: str = Field(default="", description="GitHub URL or handle")
 	website: str = Field(default="", description="Personal website URL")
+	summary: str = Field(default="", description="Professional summary / about me")
 
 
 class Education(BaseModel):

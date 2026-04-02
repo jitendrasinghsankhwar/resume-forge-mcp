@@ -44,3 +44,8 @@ htmlcov/
 # Build
 *.manifest
 *.spec
+
+output/
+.DS_Store
+*.pyc
+__pycache__/

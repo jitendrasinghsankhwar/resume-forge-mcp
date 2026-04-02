@@ -5,7 +5,7 @@ MCP server for intelligent LaTeX resume generation with visual verification and 
 ## Quick Reference
 
 - **Language**: Python 3.12 (requires >=3.11)
-- **Entry point**: `src/latex_resume_mcp/server.py`
+- **Entry point**: `src/resume_forge_mcp/server.py`
 - **Package manager**: pip with hatchling build backend
 - **Test framework**: pytest with pytest-asyncio (asyncio_mode = auto)
 
@@ -31,7 +31,7 @@ bandit -r src/
 ## Architecture
 
 ```
-src/latex_resume_mcp/
+src/resume_forge_mcp/
 ├── server.py                    # FastMCP server + 15 tool registrations
 ├── models/
 │   ├── resume.py                # Pydantic: ResumeData, Experience, Project, etc.

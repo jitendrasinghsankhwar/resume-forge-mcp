@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from latex_resume_mcp.models.resume import (
+from resume_forge_mcp.models.resume import (
 	ContactInfo,
 	Education,
 	Experience,
@@ -75,6 +75,18 @@ def _extract_project_headings(section_text: str) -> list[dict[str, str | list[st
 	return entries
 
 
+def _extract_publication_items(section_text: str) -> list[Publication]:
+	"""Extract \\item \\textbf{Title} --- description entries."""
+	entries: list[Publication] = []
+	for match in re.finditer(
+		r"\\item\s*\\textbf\{([^}]+)\}\s*---\s*(.+)", section_text,
+	):
+		title = match.group(1).strip()
+		desc = match.group(2).strip()
+		entries.append(Publication(title=title, bullets=[desc]))
+	return entries
+
+
 def _parse_heading(tex: str) -> ContactInfo:
 	"""Parse the heading/contact section."""
 	name = ""
@@ -84,23 +96,35 @@ def _parse_heading(tex: str) -> ContactInfo:
 	github = ""
 	website = ""
 
+	# Try multiple name patterns
 	name_match = re.search(r"\\scshape\s+(.+?)\}", tex)
+	if not name_match:
+		name_match = re.search(r"\\(?:LARGE|Huge|huge)\\bfseries\s+(.+?)\}", tex)
+	if not name_match:
+		name_match = re.search(r"\{\\(?:LARGE|Huge|huge)\\bfseries\s+(.+?)\}", tex)
 	if name_match:
 		name = name_match.group(1).strip()
 
-	phone_match = re.search(r"\\small\s+([\d-]+)", tex)
+	# Phone: match various formats including +1 (xxx) xxx-xxxx
+	phone_match = re.search(r"(?:\\small\s+)?\+?[\d(][\d\s()-]{7,}", tex)
 	if phone_match:
-		phone = phone_match.group(1).strip()
+		phone = phone_match.group(0).replace("\\small", "").strip()
 
 	email_match = re.search(r"\\href\{mailto:([^}]+)\}", tex)
 	if email_match:
 		email = email_match.group(1).strip()
 
+	# LinkedIn: try underline format first, then href
 	linkedin_match = re.search(r"\\underline\{(linkedin\.com[^}]+)\}", tex)
+	if not linkedin_match:
+		linkedin_match = re.search(r"\\href\{(https?://(?:www\.)?linkedin\.com[^}]*)\}", tex)
 	if linkedin_match:
 		linkedin = linkedin_match.group(1).strip()
 
+	# GitHub: try underline format first, then href
 	github_match = re.search(r"\\underline\{(github\.com[^}]+)\}", tex)
+	if not github_match:
+		github_match = re.search(r"\\href\{(https?://(?:www\.)?github\.com[^}]*)\}", tex)
 	if github_match:
 		github = github_match.group(1).strip()
 
@@ -210,8 +234,9 @@ def _parse_publication_entry(entry: dict[str, str | list[str]]) -> Publication:
 
 
 def _parse_skills(section_text: str) -> list[SkillCategory]:
-	"""Parse the Technical Skills section."""
+	"""Parse the Technical Skills / Skills section."""
 	categories: list[SkillCategory] = []
+	# Pattern 1: \textbf{Category}{: skills}  (Jake's template)
 	for match in re.finditer(
 		r"\\textbf\{([^}]+)\}\{:\s*([^}]+)\}", section_text
 	):
@@ -219,6 +244,31 @@ def _parse_skills(section_text: str) -> list[SkillCategory]:
 		skills_text = match.group(2).strip()
 		skills = [s.strip() for s in skills_text.split(",") if s.strip()]
 		categories.append(SkillCategory(category=category, skills=skills))
+	if categories:
+		return categories
+	# Pattern 2: \textbf{Category:} skills  (colon inside bold)
+	for match in re.finditer(
+		r"\\textbf\{([^}]*?)(?::|\s*\\&\s*)\s*\}\s*(.+?)(?=\\item|\\textbf|\\end|$)",
+		section_text, re.DOTALL,
+	):
+		category = match.group(1).strip().rstrip(":")
+		skills_text = match.group(2).strip()
+		skills = [s.strip() for s in skills_text.split(",") if s.strip()]
+		if skills:
+			categories.append(SkillCategory(category=category, skills=skills))
+	if categories:
+		return categories
+	# Pattern 3: \item \textbf{Category:} skills (list items)
+	for match in re.finditer(
+		r"\\item\s*\\textbf\{([^}]+?):?\}\s*(.+)", section_text,
+	):
+		category = match.group(1).strip().rstrip(":")
+		skills_text = match.group(2).strip()
+		# Remove trailing \item artifacts from greedy match
+		skills_text = re.sub(r"\s*\\item\s*\Z", "", skills_text)
+		skills = [s.strip() for s in skills_text.split(",") if s.strip()]
+		if skills:
+			categories.append(SkillCategory(category=category, skills=skills))
 	return categories
 
 
@@ -242,13 +292,34 @@ def import_from_latex(tex_path: Path) -> ResumeData:
 
 	contact = _parse_heading(sections.get("_heading", ""))
 
+	# Parse "About Me" / "Summary" section into contact.summary
+	for key in ("About Me", "Summary", "Professional Summary"):
+		if key in sections:
+			summary_text = sections[key].strip()
+			# Strip \small{...} wrapper
+			m = re.match(r"\\small\{(.+)\}\s*$", summary_text, re.DOTALL)
+			if m:
+				summary_text = m.group(1).strip()
+			contact = ContactInfo(
+				**{**contact.model_dump(), "summary": summary_text}
+			)
+			break
+
 	education: list[Education] = []
 	if "Education" in sections:
 		for entry in _extract_subheadings(sections["Education"]):
 			education.append(_parse_education_entry(entry))
 
 	publications: list[Publication] = []
-	if "Publications" in sections:
+	for key in sections:
+		if "publication" in key.lower():
+			for entry in _extract_publication_items(sections[key]):
+				publications.append(entry)
+			if not publications:
+				for entry in _extract_project_headings(sections[key]):
+					publications.append(_parse_publication_entry(entry))
+			break
+	if not publications and "Publications" in sections:
 		for entry in _extract_project_headings(sections["Publications"]):
 			publications.append(_parse_publication_entry(entry))
 
@@ -263,8 +334,11 @@ def import_from_latex(tex_path: Path) -> ResumeData:
 			projects.append(_parse_project_entry(entry))
 
 	skills: list[SkillCategory] = []
-	if "Technical Skills" in sections:
-		skills = _parse_skills(sections["Technical Skills"])
+	for key in ("Technical Skills", "Skills"):
+		if key in sections:
+			skills = _parse_skills(sections[key])
+			if skills:
+				break
 
 	return ResumeData(
 		contact=contact,

@@ -3,15 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "latex-resume-mcp"
-version = "0.2.0"
-description = "MCP server for intelligent LaTeX resume generation with visual verification"
+name = "resume-forge-mcp"
+version = "0.4.0"
+description = "MCP server for intelligent LaTeX resume generation — browse 350+ Overleaf templates, auto-compile with pdflatex/xelatex/lualatex, tailor to job descriptions, ATS scoring, and visual preview."
 readme = "README.md"
 license = "MIT"
 authors = [
+    { name = "Jitendra Singh Sankhwar" },
     { name = "Danny Liu" }
 ]
-keywords = ["mcp", "latex", "resume", "cv", "claude", "ai"]
+keywords = ["mcp", "latex", "resume", "cv", "claude", "ai", "overleaf", "pdf"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -26,19 +27,24 @@ dependencies = [
     "mcp>=1.0.0",
     "pydantic>=2.0.0",
     "jinja2>=3.1.0",
-    "pymupdf>=1.24.0",
 ]
 
+[project.optional-dependencies]
+preview = ["pymupdf>=1.24.0"]
+pdf = ["pymupdf>=1.24.0"]
+docx = ["python-docx>=1.0.0"]
+all = ["pymupdf>=1.24.0", "python-docx>=1.0.0"]
+
 [project.scripts]
-latex-resume-mcp = "latex_resume_mcp:main"
+resume-forge-mcp = "resume_forge_mcp:main"
 
 [project.urls]
-Homepage = "https://github.com/dannywillowliu-uchi/resume_mcp"
-Repository = "https://github.com/dannywillowliu-uchi/resume_mcp"
-Issues = "https://github.com/dannywillowliu-uchi/resume_mcp/issues"
+Homepage = "https://github.com/jitendrasinghsankhwar/resume-forge-mcp"
+Repository = "https://github.com/jitendrasinghsankhwar/resume-forge-mcp"
+Issues = "https://github.com/jitendrasinghsankhwar/resume-forge-mcp/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/latex_resume_mcp"]
+packages = ["src/resume_forge_mcp"]
 
 [tool.hatch.build.targets.sdist]
 include = [

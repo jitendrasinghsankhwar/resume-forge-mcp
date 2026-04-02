@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from latex_resume_mcp.models.analysis import (
+from resume_forge_mcp.models.analysis import (
 	ATSReport,
 	BulletScore,
 	JobDescription,
@@ -14,7 +14,7 @@ from latex_resume_mcp.models.analysis import (
 	ResumeScore,
 	SectionScore,
 )
-from latex_resume_mcp.models.resume import (
+from resume_forge_mcp.models.resume import (
 	ContactInfo,
 	Education,
 	Experience,

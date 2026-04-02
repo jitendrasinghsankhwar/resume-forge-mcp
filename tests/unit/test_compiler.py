@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from latex_resume_mcp.compiler.latex import (
+from resume_forge_mcp.compiler.latex import (
 	CompilationResult,
 	_find_pdflatex,
 	_parse_log,
 	compile_latex,
 )
-from latex_resume_mcp.compiler.preview import get_pdf_info, render_pdf_to_png
+from resume_forge_mcp.compiler.preview import get_pdf_info, render_pdf_to_png
 
 # -- Log parsing --
 
@@ -98,7 +98,7 @@ Hello, World!
 		assert result.pdf_path is None
 		assert result.errors == []
 
-	@patch("latex_resume_mcp.compiler.latex._find_pdflatex", return_value=None)
+	@patch("resume_forge_mcp.compiler.latex._find_pdflatex", return_value=None)
 	def test_no_pdflatex(self, mock_find: MagicMock) -> None:
 		result = compile_latex(r"\documentclass{article}\begin{document}X\end{document}")
 		assert not result.success

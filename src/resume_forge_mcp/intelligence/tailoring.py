@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from latex_resume_mcp.intelligence.knowledge import TECH_KEYWORDS
-from latex_resume_mcp.models.analysis import JobDescription
-from latex_resume_mcp.models.resume import (
+from resume_forge_mcp.intelligence.knowledge import TECH_KEYWORDS
+from resume_forge_mcp.models.analysis import JobDescription
+from resume_forge_mcp.models.resume import (
 	Experience,
 	Project,
 	ResumeData,

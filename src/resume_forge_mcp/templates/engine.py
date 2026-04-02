@@ -7,7 +7,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from latex_resume_mcp.models.resume import (
+from resume_forge_mcp.models.resume import (
 	Education,
 	Experience,
 	Project,
@@ -19,6 +19,12 @@ from latex_resume_mcp.models.resume import (
 
 TEMPLATE_DIR = Path(__file__).parent
 TEMPLATE_NAME = "jake_resume.tex.j2"
+
+BUILTIN_TEMPLATES = {
+	"modern": {"file": "modern.tex.j2", "description": "Clean, professional design with color accents and structured formatting"},
+	"classic": {"file": "classic.tex.j2", "description": "Traditional resume format with clear sections and horizontal rules"},
+	"minimal": {"file": "minimal.tex.j2", "description": "Simple, no-frills layout focusing on content"},
+}
 
 # Characters that need escaping in LaTeX
 LATEX_SPECIAL = {
@@ -193,18 +199,26 @@ def create_jinja_env() -> Environment:
 def render_resume(
 	data: ResumeData,
 	variant: ResumeVariant | None = None,
+	template_name: str | None = None,
 ) -> str:
 	"""Render a resume to LaTeX source using the Jinja2 template.
 
 	Args:
 		data: Master resume data pool.
 		variant: Optional variant for content selection. If None, uses all content.
+		template_name: Template to use ('modern', 'classic', 'minimal'). Defaults to 'modern'.
 
 	Returns:
 		Complete LaTeX source string.
 	"""
 	env = create_jinja_env()
-	template = env.get_template(TEMPLATE_NAME)
+
+	if template_name and template_name in BUILTIN_TEMPLATES:
+		tpl_file = BUILTIN_TEMPLATES[template_name]["file"]
+	else:
+		tpl_file = BUILTIN_TEMPLATES["modern"]["file"]
+
+	template = env.get_template(tpl_file)
 
 	if variant:
 		resolved = _resolve_variant(data, variant)

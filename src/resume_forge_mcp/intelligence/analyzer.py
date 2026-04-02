@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import re
 
-from latex_resume_mcp.intelligence.knowledge import (
+from resume_forge_mcp.intelligence.knowledge import (
 	ALL_ACTION_VERBS,
 	METRIC_PATTERNS,
 	SECTION_GUIDELINES,
 )
-from latex_resume_mcp.models.analysis import (
+from resume_forge_mcp.models.analysis import (
 	ATSReport,
 	BulletScore,
 	KeywordMatch,
@@ -17,7 +17,7 @@ from latex_resume_mcp.models.analysis import (
 	ResumeScore,
 	SectionScore,
 )
-from latex_resume_mcp.models.resume import ResumeData
+from resume_forge_mcp.models.resume import ResumeData
 
 
 def _check_xyz_structure(text: str) -> bool:

@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from latex_resume_mcp.models.resume import ResumeData, ResumeVariant
-from latex_resume_mcp.storage.resume_store import ResumeStore
+from resume_forge_mcp.models.resume import ResumeData, ResumeVariant
+from resume_forge_mcp.storage.resume_store import ResumeStore
 
 
 @pytest.fixture
@@ -31,10 +31,10 @@ def integration_setup(
 
 		# Patch the helper functions to use our test directories
 		with (
-			patch("latex_resume_mcp.server._get_store", return_value=store),
-			patch("latex_resume_mcp.server._ensure_output_dir", return_value=output_dir),
-			patch("latex_resume_mcp.server._get_data_dir", return_value=data_dir),
-			patch("latex_resume_mcp.server._get_output_dir", return_value=output_dir),
+			patch("resume_forge_mcp.server._get_store", return_value=store),
+			patch("resume_forge_mcp.server._ensure_output_dir", return_value=output_dir),
+			patch("resume_forge_mcp.server._get_data_dir", return_value=data_dir),
+			patch("resume_forge_mcp.server._get_output_dir", return_value=output_dir),
 		):
 			yield store, output_dir
 
@@ -46,7 +46,7 @@ class TestDataManagementTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""get_resume_data returns valid JSON."""
-		from latex_resume_mcp.server import get_resume_data
+		from resume_forge_mcp.server import get_resume_data
 
 		result = get_resume_data()
 		data = json.loads(result)
@@ -56,11 +56,11 @@ class TestDataManagementTools:
 
 	def test_get_resume_data_missing(self) -> None:
 		"""get_resume_data returns error when no data."""
-		from latex_resume_mcp.server import get_resume_data
+		from resume_forge_mcp.server import get_resume_data
 
 		with tempfile.TemporaryDirectory() as tmpdir:
 			store = ResumeStore(Path(tmpdir))
-			with patch("latex_resume_mcp.server._get_store", return_value=store):
+			with patch("resume_forge_mcp.server._get_store", return_value=store):
 				result = get_resume_data()
 				data = json.loads(result)
 
@@ -70,7 +70,7 @@ class TestDataManagementTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""list_variants returns variant list."""
-		from latex_resume_mcp.server import list_variants
+		from resume_forge_mcp.server import list_variants
 
 		result = list_variants()
 		data = json.loads(result)
@@ -83,7 +83,7 @@ class TestDataManagementTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""get_variant returns variant configuration."""
-		from latex_resume_mcp.server import get_variant
+		from resume_forge_mcp.server import get_variant
 
 		result = get_variant("swe")
 		data = json.loads(result)
@@ -95,7 +95,7 @@ class TestDataManagementTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""get_variant returns error for unknown variant."""
-		from latex_resume_mcp.server import get_variant
+		from resume_forge_mcp.server import get_variant
 
 		result = get_variant("nonexistent")
 		data = json.loads(result)
@@ -106,7 +106,7 @@ class TestDataManagementTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""save_variant creates a new variant."""
-		from latex_resume_mcp.server import save_variant
+		from resume_forge_mcp.server import save_variant
 
 		store, _ = integration_setup
 
@@ -127,7 +127,7 @@ class TestDataManagementTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""update_resume_data can add entries."""
-		from latex_resume_mcp.server import update_resume_data
+		from resume_forge_mcp.server import update_resume_data
 
 		entry = json.dumps({
 			"company": "New Company",
@@ -152,7 +152,7 @@ class TestGenerationTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""generate_resume creates .tex file."""
-		from latex_resume_mcp.server import generate_resume
+		from resume_forge_mcp.server import generate_resume
 
 		_, output_dir = integration_setup
 
@@ -166,7 +166,7 @@ class TestGenerationTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""generate_resume uses variant when specified."""
-		from latex_resume_mcp.server import generate_resume
+		from resume_forge_mcp.server import generate_resume
 
 		result = generate_resume(variant_name="swe", output_filename="swe_resume")
 		data = json.loads(result)
@@ -178,7 +178,7 @@ class TestGenerationTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""generate_resume errors on invalid variant."""
-		from latex_resume_mcp.server import generate_resume
+		from resume_forge_mcp.server import generate_resume
 
 		result = generate_resume(variant_name="nonexistent")
 		data = json.loads(result)
@@ -193,7 +193,7 @@ class TestIntelligenceTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""score_resume_quality returns detailed scores."""
-		from latex_resume_mcp.server import score_resume_quality
+		from resume_forge_mcp.server import score_resume_quality
 
 		result = score_resume_quality()
 		data = json.loads(result)
@@ -206,7 +206,7 @@ class TestIntelligenceTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""score_resume_quality includes keyword match."""
-		from latex_resume_mcp.server import score_resume_quality
+		from resume_forge_mcp.server import score_resume_quality
 
 		result = score_resume_quality(keywords=["Python", "Flask"])
 		data = json.loads(result)
@@ -218,7 +218,7 @@ class TestIntelligenceTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""parse_job_description_text extracts JD info."""
-		from latex_resume_mcp.server import parse_job_description_text
+		from resume_forge_mcp.server import parse_job_description_text
 
 		jd_text = """
 		Software Engineer
@@ -240,7 +240,7 @@ class TestPreviewContentSelection:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""preview_content_selection returns detailed selection info."""
-		from latex_resume_mcp.server import preview_content_selection
+		from resume_forge_mcp.server import preview_content_selection
 
 		jd_text = """
 		Software Engineer
@@ -261,7 +261,7 @@ class TestPreviewContentSelection:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""preview_content_selection shows scores for each entry."""
-		from latex_resume_mcp.server import preview_content_selection
+		from resume_forge_mcp.server import preview_content_selection
 
 		jd_text = "Software Engineer at TechCorp. Requirements: Python, SQL"
 
@@ -280,7 +280,7 @@ class TestPreviewContentSelection:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""preview_content_selection respects include/exclude params."""
-		from latex_resume_mcp.server import preview_content_selection
+		from resume_forge_mcp.server import preview_content_selection
 
 		jd_text = "Software Engineer"
 
@@ -306,7 +306,7 @@ class TestPreviewContentSelection:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""preview_content_selection shows parsed JD info."""
-		from latex_resume_mcp.server import preview_content_selection
+		from resume_forge_mcp.server import preview_content_selection
 
 		jd_text = """
 		Software Engineer
@@ -328,7 +328,7 @@ class TestUtilityTools:
 		self, integration_setup: tuple[ResumeStore, Path]
 	) -> None:
 		"""get_config returns configuration."""
-		from latex_resume_mcp.server import get_config
+		from resume_forge_mcp.server import get_config
 
 		result = get_config()
 		data = json.loads(result)
