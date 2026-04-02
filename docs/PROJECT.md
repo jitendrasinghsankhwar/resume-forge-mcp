@@ -65,3 +65,11 @@ src/resume_forge_mcp/
 2. **Skills `\item` artifact on import** — Pattern 2 in `_parse_skills` can leak `\item` into last skill. Fixed in v0.4.0 but only for Pattern 2 lookahead.
 3. **"About Me" section not imported** — no parser for freeform summary sections.
 4. **PDF/DOCX import not implemented** — `import_resume` supports .tex only until `pdf_import.py` and `docx_import.py` are created.
+
+## Git Setup
+
+- **Personal GitHub**: `github.com/jitendrasinghsankhwar/resume-forge-mcp`
+- **Auth token**: `$PERSONAL_GIT_TOKEN` (from `~/.bash_profile`)
+- **PyPI token**: `$PYPI_TOKEN` (from `~/.bash_profile`)
+- **Always** `source ~/.bash_profile` before git push or PyPI publish
+- **Never** use company git (`jsankhwar@mdsol.com`) for this repo
